@@ -383,7 +383,14 @@ def load():
         "## Notes\n\n- \n", encoding="utf-8"
     )
     written += 1
-    print(f"wrote {written} demo notes; run `python3 demo/demo.py clear` to remove them")
+    print(f"wrote {written} demo notes")
+    print()
+    print("  Reload Obsidian now (Cmd+R) if it is open.")
+    print("  These files were written behind its back, so Iconize has registered their")
+    print("  icons but the file explorer has not drawn them yet -- notes will show up")
+    print("  with no icon until a reload. Nothing is wrong.")
+    print()
+    print("  Remove them again with: python3 demo/demo.py clear")
 
 
 def clear():

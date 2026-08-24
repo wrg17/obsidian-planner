@@ -419,6 +419,12 @@ python3 demo/demo.py load     # ~25 throwaway notes
 python3 demo/demo.py clear    # delete exactly those again
 ```
 
+**Reload the vault (`Cmd+R`) after either command.** Both write files while Obsidian is running,
+and Iconize decorates a note in the file explorer only when that row renders — so new notes show
+up with no icon until you reload. The entries are already in its store; they simply have not been
+painted. This is the same mechanism described under *Configuration ownership*: the plugin has no
+watcher for changes made outside the app.
+
 It writes a `Studio` and a `Household` area, two projects, two epics, ten tickets, three
 routines, two docs, a decision, a meeting and a weekly review — covering all seven statuses,
 all five issue types, priorities 1–4, a `blocked_by` link, a cancelled ticket and a closed

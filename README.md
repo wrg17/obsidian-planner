@@ -58,6 +58,10 @@ python3 demo/demo.py load     # ~25 notes: every view populated
 python3 demo/demo.py clear    # delete exactly those again
 ```
 
+**Reload Obsidian (`Cmd+R`) after either command.** Both write files behind the app's back, and
+Iconize only draws a note's icon when the file explorer renders it — so fresh notes appear with no
+icon until you reload. The icons are registered; they just aren't painted yet.
+
 It covers all seven statuses, all five issue types, priorities 1–4, a blocked ticket, a cancelled
 one and a closed subtask. Dates are generated relative to today, so something is always due today,
 something is overdue, and a routine is a week late — the board looks alive whenever you run it.
