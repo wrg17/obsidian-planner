@@ -1,0 +1,166 @@
+filters:
+  and:
+    - kind == "epic" || kind == "task" || kind == "subtask"
+formulas:
+  lane: if(done || status == "done", "6 · Done", if(status == "cancelled", "7 · Cancelled", if(status == "backlog", "1 · Backlog", if(status == "todo", "2 · Todo", if(status == "doing", "3 · Doing", if(status == "blocked", "4 · Blocked", if(status == "review", "5 · Review", "8 · Unknown status")))))))
+  open: '!done && status != "done" && status != "cancelled"'
+  done_num: if(done || status == "done", 1, 0)
+  type_icon: if(type == "bug", icon("triangle-alert"), if(type == "spike", icon("search-code"), if(type == "research", icon("book-open"), if(type == "chore", icon("circle-dot"), icon("square-check")))))
+  flag: if(priority == 1, icon("chevrons-up"), if(priority == 2, icon("arrow-up"), ""))
+properties:
+  kind:
+    displayName: Kind
+  type:
+    displayName: Type
+  status:
+    displayName: Status
+  priority:
+    displayName: P
+  parent:
+    displayName: Parent
+  project:
+    displayName: Project
+  due:
+    displayName: Due
+  blocked_by:
+    displayName: Blocked by
+  formula.type_icon:
+    displayName: " "
+  formula.flag:
+    displayName: "!"
+  formula.lane:
+    displayName: Lane
+  closed:
+    displayName: Closed
+  formula.done_num:
+    displayName: Done
+views:
+  - type: cards
+    name: Board
+    filters: formula.open
+    groupBy:
+      property: formula.lane
+      direction: ASC
+    order:
+      - formula.type_icon
+      - file.name
+      - formula.flag
+      - type
+      - priority
+      - due
+      - project
+    sort:
+      - property: priority
+        direction: ASC
+      - property: due
+        direction: ASC
+  - type: table
+    name: Board (edit)
+    groupBy:
+      property: formula.lane
+      direction: ASC
+    order:
+      - formula.type_icon
+      - file.name
+      - done
+      - formula.flag
+      - status
+      - kind
+      - type
+      - priority
+      - due
+      - parent
+      - project
+    sort:
+      - property: priority
+        direction: ASC
+      - property: due
+        direction: ASC
+    summaries:
+      formula.done_num: Sum
+  - type: table
+    name: Doing now
+    filters: status == "doing"
+    order:
+      - file.name
+      - kind
+      - type
+      - due
+      - project
+      - parent
+    sort:
+      - property: priority
+        direction: ASC
+  - type: table
+    name: Bugs
+    filters:
+      and:
+        - type == "bug"
+        - formula.open
+    order:
+      - file.name
+      - done
+      - status
+      - priority
+      - due
+      - project
+    sort:
+      - property: priority
+        direction: ASC
+  - type: table
+    name: By type
+    filters: formula.open
+    groupBy:
+      property: type
+      direction: ASC
+    order:
+      - file.name
+      - done
+      - status
+      - priority
+      - due
+      - project
+    sort:
+      - property: priority
+        direction: ASC
+  - type: table
+    name: Blocked
+    filters:
+      or:
+        - status == "blocked"
+        - blocked_by
+    order:
+      - file.name
+      - done
+      - status
+      - blocked_by
+      - project
+      - parent
+  - type: table
+    name: Backlog
+    filters: status == "backlog"
+    order:
+      - file.name
+      - type
+      - priority
+      - project
+      - parent
+    sort:
+      - property: priority
+        direction: ASC
+  - type: table
+    name: Recently closed
+    filters:
+      and:
+        - closed
+        - closed >= today() - "30d"
+    order:
+      - file.name
+      - closed
+      - type
+      - priority
+      - project
+    sort:
+      - property: closed
+        direction: DESC
+newItemFolder: Items

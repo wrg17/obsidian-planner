@@ -1,0 +1,88 @@
+filters:
+  and:
+    - kind == "doc" || kind == "decision"
+formulas:
+  touched: file.mtime.relative()
+properties:
+  kind:
+    displayName: Kind
+  status:
+    displayName: Status
+  project:
+    displayName: Project
+  area:
+    displayName: Area
+  date:
+    displayName: Date
+  supersedes:
+    displayName: Supersedes
+  formula.touched:
+    displayName: Touched
+views:
+  - type: table
+    name: All docs
+    filters: kind == "doc"
+    groupBy:
+      property: project
+      direction: ASC
+    order:
+      - file.name
+      - status
+      - area
+      - formula.touched
+    sort:
+      - property: file.name
+        direction: ASC
+  - type: table
+    name: Decisions
+    filters: kind == "decision"
+    order:
+      - file.name
+      - status
+      - date
+      - project
+      - supersedes
+    sort:
+      - property: date
+        direction: DESC
+  - type: table
+    name: Decisions by project
+    filters: kind == "decision"
+    groupBy:
+      property: project
+      direction: ASC
+    order:
+      - file.name
+      - status
+      - date
+    sort:
+      - property: date
+        direction: DESC
+  - type: table
+    name: Recently edited
+    order:
+      - file.name
+      - kind
+      - status
+      - project
+      - formula.touched
+    sort:
+      - property: file.mtime
+        direction: DESC
+    limit: 25
+  - type: table
+    name: Needs review
+    filters:
+      or:
+        - status == "stale"
+        - status == "draft"
+        - kind == "doc" && file.mtime < now() - "180d"
+    order:
+      - file.name
+      - status
+      - project
+      - formula.touched
+    sort:
+      - property: file.mtime
+        direction: ASC
+newItemFolder: Docs

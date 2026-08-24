@@ -1,0 +1,155 @@
+filters:
+  and:
+    - kind == "task" || kind == "subtask" || kind == "routine"
+formulas:
+  open: '!done && status != "done" && status != "cancelled"'
+  next_due: if(recur, if(last_done, if(recur == "weekly", last_done + "1w", if(recur == "monthly", last_done + "1M", last_done + "1d")), today()), due)
+  when: if(formula.next_due, formula.next_due.relative(), "")
+  weekday_ok: if(recur == "weekdays", today().format("d") != "0" && today().format("d") != "6", true)
+properties:
+  kind:
+    displayName: Kind
+  type:
+    displayName: Type
+  status:
+    displayName: Status
+  priority:
+    displayName: P
+  recur:
+    displayName: Recur
+  last_done:
+    displayName: Last done
+  due:
+    displayName: Due
+  project:
+    displayName: Project
+  area:
+    displayName: Area
+  formula.next_due:
+    displayName: Next due
+  formula.when:
+    displayName: When
+views:
+  - type: table
+    name: Due today
+    filters:
+      and:
+        - formula.open
+        - formula.next_due
+        - formula.next_due <= today()
+        - formula.weekday_ok
+    order:
+      - file.name
+      - kind
+      - recur
+      - last_done
+      - due
+      - priority
+      - project
+    sort:
+      - property: priority
+        direction: ASC
+      - property: formula.next_due
+        direction: ASC
+  - type: table
+    name: Routines
+    filters: kind == "routine"
+    order:
+      - file.name
+      - recur
+      - last_done
+      - formula.next_due
+      - formula.when
+      - area
+    sort:
+      - property: formula.next_due
+        direction: ASC
+  - type: table
+    name: Routines due
+    filters:
+      and:
+        - kind == "routine"
+        - status == "active"
+        - formula.next_due
+        - formula.next_due <= today()
+        - formula.weekday_ok
+    order:
+      - file.name
+      - recur
+      - last_done
+      - formula.next_due
+      - formula.when
+      - area
+    sort:
+      - property: formula.next_due
+        direction: ASC
+  - type: table
+    name: Overdue
+    filters:
+      and:
+        - formula.open
+        - due
+        - due < today()
+    order:
+      - file.name
+      - due
+      - priority
+      - done
+      - status
+      - project
+    sort:
+      - property: due
+        direction: ASC
+  - type: table
+    name: Next 7 days
+    filters:
+      and:
+        - formula.open
+        - due
+        - due > today()
+        - due <= today() + "7d"
+    order:
+      - file.name
+      - due
+      - priority
+      - done
+      - status
+      - project
+    sort:
+      - property: due
+        direction: ASC
+  - type: table
+    name: Scheduled
+    filters:
+      and:
+        - formula.open
+        - scheduled
+    order:
+      - file.name
+      - scheduled
+      - due
+      - priority
+      - project
+    sort:
+      - property: scheduled
+        direction: ASC
+  - type: table
+    name: All open work
+    filters:
+      and:
+        - formula.open
+        - kind != "routine"
+    order:
+      - file.name
+      - done
+      - status
+      - priority
+      - due
+      - project
+      - parent
+    sort:
+      - property: priority
+        direction: ASC
+      - property: due
+        direction: ASC
+newItemFolder: Items

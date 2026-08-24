@@ -1,0 +1,25 @@
+{
+  "types": {
+    "due": "date",
+    "scheduled": "date",
+    "closed": "date",
+    "last_done": "date",
+    "created": "date",
+    "date": "date",
+    "priority": "number",
+    "blocked_by": "multitext",
+    "attendees": "multitext",
+    "supersedes": "multitext",
+    "kind": "text",
+    "status": "text",
+    "type": "text",
+    "recur": "text",
+    "parent": "text",
+    "project": "text",
+    "area": "text",
+    "week": "text",
+    "done": "checkbox",
+    "icon": "text",
+    "iconColor": "text"
+  }
+}

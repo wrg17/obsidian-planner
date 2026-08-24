@@ -1,0 +1,33 @@
+# Machine-local Obsidian state — never share these, they cause churn and conflicts
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.obsidian/graph.json
+
+# Plugin CODE is not vendored: install Iconize and Templater from Community plugins.
+#
+# Everything tracked under .obsidian/ is an APP-WRITTEN SNAPSHOT, not a file to hand-edit.
+# Both plugins load their data.json once at startup and rewrite it from memory, with no
+# watcher for external changes — so editing it while Obsidian runs is silently discarded.
+# Change config in Settings, then commit what the app wrote.
+# See "Configuration ownership" in System.md.
+.obsidian/plugins/*/main.js
+.obsidian/plugins/*/styles.css
+.obsidian/plugins/*/*.js.map
+
+# Iconize rewrites its store on every launch as it lazily registers icons, so tracking it
+# means a dirty tree after simply opening the vault. Note icons regenerate from the icon:
+# and iconColor: frontmatter every note carries (Settings → Iconize → Refresh icons from
+# frontmatter). FOLDER icons do not — folders have no frontmatter, so a fresh clone starts
+# with plain folders. Rebuild them from the table in System.md → Icons. That manual step is
+# the price of a clean tree.
+#
+# Templater's data.json stays tracked: it is small, stable, and holds the template folder
+# setting a clone needs.
+.obsidian/plugins/obsidian-icon-folder/data.json
+
+# Obsidian's own trash
+.trash/
+
+# macOS
+.DS_Store

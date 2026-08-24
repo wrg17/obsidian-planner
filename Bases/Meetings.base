@@ -1,0 +1,58 @@
+filters:
+  and:
+    - kind == "meeting"
+formulas:
+  when: if(note.date, note.date.relative(), "")
+properties:
+  date:
+    displayName: Date
+  project:
+    displayName: Project
+  attendees:
+    displayName: Attendees
+  formula.when:
+    displayName: When
+views:
+  - type: table
+    name: Upcoming
+    filters:
+      and:
+        - note.date
+        - note.date >= today()
+    order:
+      - file.name
+      - date
+      - project
+      - attendees
+    sort:
+      - property: date
+        direction: ASC
+  - type: table
+    name: Recent
+    filters:
+      and:
+        - note.date
+        - note.date < today()
+    order:
+      - file.name
+      - date
+      - project
+      - attendees
+      - formula.when
+    sort:
+      - property: date
+        direction: DESC
+    limit: 50
+  - type: table
+    name: By project
+    groupBy:
+      property: project
+      direction: ASC
+    order:
+      - file.name
+      - date
+      - attendees
+    sort:
+      - property: date
+        direction: DESC
+newItemFolder: Meetings

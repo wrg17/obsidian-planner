@@ -1,0 +1,115 @@
+filters:
+  and:
+    - file.inFolder("Items")
+formulas:
+  open: '!done && status != "done" && status != "cancelled"'
+  touched: file.mtime.relative()
+properties:
+  kind:
+    displayName: Kind
+  type:
+    displayName: Type
+  status:
+    displayName: Status
+  priority:
+    displayName: P
+  parent:
+    displayName: Parent
+  project:
+    displayName: Project
+  area:
+    displayName: Area
+  recur:
+    displayName: Recur
+  formula.touched:
+    displayName: Touched
+views:
+  - type: table
+    name: Untriaged
+    filters: '!file.hasProperty("kind")'
+    order:
+      - file.name
+      - formula.touched
+    sort:
+      - property: file.name
+        direction: ASC
+      - property: file.mtime
+        direction: DESC
+  - type: table
+    name: Invalid values
+    filters:
+      or:
+        - status != "backlog" && status != "todo" && status != "doing" && status != "blocked" && status != "review" && status != "done" && status != "cancelled" && status != "active" && status != "paused"
+        - type && type != "feature" && type != "bug" && type != "chore" && type != "spike" && type != "research"
+        - recur && recur != "daily" && recur != "weekdays" && recur != "weekly" && recur != "monthly"
+        - priority && (priority < 1 || priority > 4)
+        - kind != "area" && kind != "project" && kind != "epic" && kind != "task" && kind != "subtask" && kind != "routine"
+    order:
+      - file.name
+      - kind
+      - status
+      - type
+      - priority
+      - recur
+  - type: table
+    name: No parent
+    filters:
+      and:
+        - kind == "epic" || kind == "task" || kind == "subtask"
+        - "!parent"
+    order:
+      - file.name
+      - kind
+      - status
+      - project
+  - type: table
+    name: Missing project
+    filters:
+      and:
+        - kind == "epic" || kind == "task" || kind == "subtask"
+        - "!project"
+    order:
+      - file.name
+      - kind
+      - parent
+      - status
+  - type: table
+    name: No date, no priority
+    filters:
+      and:
+        - status == "backlog"
+        - "!due"
+        - "!priority"
+    order:
+      - file.name
+      - kind
+      - project
+      - formula.touched
+  - type: table
+    name: Stale
+    filters:
+      and:
+        - formula.open
+        - kind == "epic" || kind == "task" || kind == "subtask"
+        - file.mtime < now() - "30d"
+    order:
+      - file.name
+      - status
+      - priority
+      - project
+      - formula.touched
+    sort:
+      - property: file.mtime
+        direction: ASC
+  - type: table
+    name: Done but no closed date
+    filters:
+      and:
+        - done || status == "done"
+        - "!closed"
+    order:
+      - file.name
+      - kind
+      - status
+      - project
+newItemFolder: Items

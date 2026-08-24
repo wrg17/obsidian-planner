@@ -1,0 +1,128 @@
+newItemFolder: Items
+filters:
+  and:
+    - 'file.hasProperty("kind")'
+formulas:
+  open: '!done && status != "done" && status != "cancelled"'
+  done_num: 'if(done || status == "done", 1, 0)'
+  lane: 'if(done || status == "done", "6 · Done", if(status == "cancelled", "7 · Cancelled", if(status == "backlog", "1 · Backlog", if(status == "todo", "2 · Todo", if(status == "doing", "3 · Doing", if(status == "blocked", "4 · Blocked", if(status == "review", "5 · Review", "8 · Unknown status")))))))'
+  touched: 'file.mtime.relative()'
+properties:
+  kind:
+    displayName: Kind
+  type:
+    displayName: Type
+  status:
+    displayName: Status
+  priority:
+    displayName: P
+  area:
+    displayName: Area
+  project:
+    displayName: Project
+  parent:
+    displayName: Parent
+  due:
+    displayName: Due
+  formula.done_num:
+    displayName: Done
+  formula.touched:
+    displayName: Touched
+views:
+  - type: table
+    name: Areas
+    filters: 'kind == "area"'
+    order:
+      - file.name
+      - done
+      - note.status
+      - formula.touched
+    sort:
+      - property: file.name
+        direction: ASC
+  - type: table
+    name: Projects
+    filters: 'kind == "project"'
+    groupBy:
+      property: note.area
+      direction: ASC
+    order:
+      - file.name
+      - done
+      - note.status
+      - note.priority
+      - note.due
+      - formula.touched
+    sort:
+      - property: note.priority
+        direction: ASC
+      - property: note.due
+        direction: ASC
+  - type: table
+    name: Epics
+    filters: 'kind == "epic"'
+    groupBy:
+      property: note.project
+      direction: ASC
+    order:
+      - file.name
+      - done
+      - note.status
+      - note.type
+      - note.priority
+      - note.due
+    sort:
+      - property: note.priority
+        direction: ASC
+  - type: table
+    name: Progress by project
+    filters: 'kind == "task" || kind == "subtask"'
+    groupBy:
+      property: note.project
+      direction: ASC
+    order:
+      - file.name
+      - done
+      - note.status
+      - note.kind
+      - note.priority
+      - note.due
+      - formula.done_num
+    sort:
+      - property: note.priority
+        direction: ASC
+    summaries:
+      formula.done_num: Sum
+      note.status: Filled
+  - type: table
+    name: Progress by parent
+    filters: 'kind == "task"'
+    groupBy:
+      property: note.parent
+      direction: ASC
+    order:
+      - file.name
+      - done
+      - note.status
+      - note.type
+      - note.priority
+      - note.due
+      - formula.done_num
+    sort:
+      - property: note.priority
+        direction: ASC
+    summaries:
+      formula.done_num: Sum
+      note.status: Filled
+  - type: table
+    name: Active portfolio
+    filters:
+      and:
+        - 'kind == "area" || kind == "project"'
+        - 'status == "active"'
+    order:
+      - file.name
+      - note.kind
+      - note.area
+      - note.due
+      - formula.touched
