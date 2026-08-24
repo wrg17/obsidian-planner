@@ -9,11 +9,16 @@ created: "<% tp.date.now('YYYY-MM-DD') %>"
 
 # Week <% tp.date.now('GGGG-[W]WW') %>
 
+The three sections below are **pinned to this note's week**, taken from its own `week` property
+(falling back to its filename). Open last month's review and you get that week's numbers, not a
+rolling window ending today.
+
 ## Closed this week
 
 ```base
 newItemFolder: Items
 formulas:
+  wk: 'if(this.week, this.week, this.file.basename)'
   done_num: 'if(done || status == "done", 1, 0)'
 views:
   - type: table
@@ -21,7 +26,7 @@ views:
     filters:
       and:
         - 'closed'
-        - 'closed >= today() - "7d"'
+        - 'closed.format("GGGG-[W]WW") == formula.wk'
     order:
       - file.name
       - note.kind
@@ -35,22 +40,23 @@ views:
       formula.done_num: Sum
 ```
 
-## Slipped
+## Due this week
 
-Open work whose due date has passed. Either do it, re-date it, or drop it — don't let it rot.
+Everything dated into this week, with `status` showing how it turned out. Anything still open
+here is what slipped — do it, re-date it, or drop it.
 
 ```base
 newItemFolder: Items
 formulas:
-  open: '!done && status != "done" && status != "cancelled"'
+  wk: 'if(this.week, this.week, this.file.basename)'
+  done_num: 'if(done || status == "done", 1, 0)'
 views:
   - type: table
-    name: Slipped
+    name: Due this week
     filters:
       and:
-        - 'formula.open'
         - 'due'
-        - 'due < today()'
+        - 'due.format("GGGG-[W]WW") == formula.wk'
     order:
       - file.name
       - done
@@ -61,9 +67,40 @@ views:
     sort:
       - property: note.due
         direction: ASC
+    summaries:
+      formula.done_num: Sum
+      note.status: Filled
+```
+
+## Opened this week
+
+```base
+newItemFolder: Items
+formulas:
+  wk: 'if(this.week, this.week, this.file.basename)'
+views:
+  - type: table
+    name: Opened
+    filters:
+      and:
+        - 'created'
+        - 'created.format("GGGG-[W]WW") == formula.wk'
+        - 'kind == "epic" || kind == "task" || kind == "subtask"'
+    order:
+      - file.name
+      - note.kind
+      - note.status
+      - note.priority
+      - note.project
+    sort:
+      - property: note.created
+        direction: ASC
 ```
 
 ## Routines missed
+
+Live, not pinned — `last_done` stores one value, not a history, so a routine's state three weeks
+ago cannot be reconstructed. Only meaningful in the current week's review.
 
 ```base
 newItemFolder: Items
@@ -89,6 +126,9 @@ views:
 ```
 
 ## Stale
+
+Live as well — `file.mtime` is the current modification time, so this always means "untouched for
+30 days as of right now".
 
 ```base
 newItemFolder: Items

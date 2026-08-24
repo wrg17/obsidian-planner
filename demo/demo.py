@@ -27,6 +27,18 @@ def d(offset):
     return (TODAY + timedelta(days=offset)).isoformat()
 
 
+def this_week(day):
+    """`day` days after Monday of the current ISO week, never in the future.
+
+    Closed dates have to land inside the current ISO week or the weekly review --
+    which pins to its own week rather than a rolling window -- renders empty, and an
+    empty view is indistinguishable from a broken one. Clamping to today keeps the
+    dates from running ahead when the demo is loaded early in the week.
+    """
+    monday = TODAY - timedelta(days=TODAY.weekday())
+    return min(monday + timedelta(days=day), TODAY).isoformat()
+
+
 # Icon and colour per kind, matching Templates/.
 STYLE = {
     "area":     ("LiLandPlot",        "#8B5CF6"),
@@ -143,6 +155,30 @@ views:
 ```"""
 
 
+def review_block(name, date_filter, order, sort_by, direction):
+    """A weekly-review view pinned to the note's own week rather than a rolling window."""
+    cols = "\n".join(f"      - {c}" for c in order)
+    return f"""```base
+newItemFolder: Items
+formulas:
+  wk: 'if(this.week, this.week, this.file.basename)'
+  done_num: 'if(done || status == "done", 1, 0)'
+views:
+  - type: table
+    name: {name}
+    filters:
+      and:
+        - '{date_filter}'
+    order:
+{cols}
+    sort:
+      - property: {sort_by}
+        direction: {direction}
+    summaries:
+      formula.done_num: Sum
+```"""
+
+
 def area_block():
     return """```base
 newItemFolder: Items
@@ -231,22 +267,22 @@ NOTES = [
     ("Items", "Rebuild the footer", {
         "kind": "task", "status": "cancelled", "done": False, "type": "feature",
         "parent": "[[Design system]]", "project": "[[Website relaunch]]",
-        "priority": 4, "closed": d(-2)},
+        "priority": 4, "closed": this_week(1)},
      "Dropped from scope. Cancelled work leaves the board without being deleted.\n"),
 
     # ---- subtasks ----------------------------------------------------------
     ("Items", "Collect reference sites", {
         "kind": "subtask", "status": "doing", "done": False, "type": "research",
         "parent": "[[Pick a type scale]]", "project": "[[Website relaunch]]",
-        "priority": 2, "due": d(1)},
+        "priority": 2, "due": d(1), "created": this_week(0)},
      "Ten sites whose typography holds up on a phone.\n"),
 
     ("Items", "Test at 320px", {
         "kind": "subtask", "status": "done", "done": True, "type": "feature",
         "parent": "[[Pick a type scale]]", "project": "[[Website relaunch]]",
-        "priority": 1, "due": d(-3), "closed": d(-3)},
-     "Closed, so it counts toward the `Sum` in the parent's group header and appears "
-     "in **Recently closed**.\n"),
+        "priority": 1, "due": this_week(0), "closed": this_week(0)},
+     "Closed inside the current ISO week, so it counts toward the `Sum` in the parent's "
+     "group header and shows up in this week's review.\n"),
 
     # ---- tasks: Content migration -----------------------------------------
     ("Items", "Export old posts", {
@@ -259,14 +295,14 @@ NOTES = [
     ("Items", "Proofread the about page", {
         "kind": "task", "status": "review", "done": False, "type": "chore",
         "parent": "[[Content migration]]", "project": "[[Website relaunch]]",
-        "priority": 2, "due": d(3)},
+        "priority": 2, "due": d(3), "created": this_week(0)},
      "In review -- written, not yet signed off.\n\n## Subtasks\n\n" + task_block()),
 
     # ---- tasks: Kitchen refit ---------------------------------------------
     ("Items", "Measure the alcove", {
         "kind": "task", "status": "todo", "done": False, "type": "chore",
         "parent": "[[Kitchen refit]]", "project": "[[Kitchen refit]]",
-        "priority": 1, "due": d(2), "scheduled": d(2)},
+        "priority": 1, "due": d(2), "scheduled": d(2), "created": this_week(0)},
      "## Subtasks\n\n" + task_block()),
 
     ("Items", "Compare worktop quotes", {
@@ -335,7 +371,7 @@ def frontmatter(fields, kind):
     icon, colour = STYLE[kind]
     lines = ["---", f"kind: {kind}", f"icon: {icon}", f'iconColor: "{colour}"']
     for key, value in fields.items():
-        if key == "kind":
+        if key in ("kind", "created"):
             continue
         if isinstance(value, bool):
             lines.append(f"{key}: {str(value).lower()}")
@@ -349,7 +385,7 @@ def frontmatter(fields, kind):
             lines.append(f'{key}: "{value}"')
         else:
             lines.append(f"{key}: {value}")
-    lines.append(f"created: {d(-30)}")
+    lines.append(f"created: {fields.get('created', d(-30))}")
     lines.append("---")
     return "\n".join(lines)
 
@@ -378,9 +414,19 @@ def load():
         f"---\nkind: review\nicon: {icon}\niconColor: \"{colour}\"\n"
         f"week: {TODAY.strftime('%G-W%V')}\ncreated: {d(0)}\n---\n\n"
         f"# {TODAY.strftime('%G-W%V')}\n\n"
-        "## Closed this week\n\n![[Board.base#Recently closed]]\n\n"
-        "## Slipped\n\n![[Today.base#Overdue]]\n\n"
-        "## Notes\n\n- \n", encoding="utf-8"
+        "Pinned to this note's own `week`, so it stays a record of this week rather than a\n"
+        "rolling window ending today.\n\n"
+        "## Closed this week\n\n" + review_block(
+            "Closed", 'closed.format("GGGG-[W]WW") == formula.wk',
+            ["file.name", "note.kind", "note.type", "note.closed", "note.project"],
+            "note.closed", "DESC") + "\n\n"
+        "## Due this week\n\n" + review_block(
+            "Due this week", 'due.format("GGGG-[W]WW") == formula.wk',
+            ["file.name", "done", "note.status", "note.due", "note.priority", "note.project"],
+            "note.due", "ASC") + "\n\n"
+        "## Routines missed\n\nLive, not pinned — `last_done` holds one value, not a history.\n\n"
+        "![[Today.base#Routines due]]\n\n"
+        "## Reflection\n\nWhat went well:\n\nWhat to change next week:\n", encoding="utf-8"
     )
     written += 1
     print(f"wrote {written} demo notes")
