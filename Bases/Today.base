@@ -3,7 +3,7 @@ filters:
     - kind == "task" || kind == "subtask" || kind == "routine"
 formulas:
   open: '!done && status != "done" && status != "cancelled"'
-  next_due: if(recur, if(last_done, if(recur == "weekly", last_done + "1w", if(recur == "monthly", last_done + "1M", last_done + "1d")), today()), due)
+  next_due: if(recur, if(last_done, if(recur == "weekly", last_done + "1w", if(recur == "monthly", last_done + "1M", if(recur == "weekdays", if(last_done.format("d") == "5", last_done + "3d", if(last_done.format("d") == "6", last_done + "2d", last_done + "1d")), last_done + "1d"))), today()), due)
   when: if(formula.next_due, formula.next_due.relative(), "")
   weekday_ok: if(recur == "weekdays", today().format("d") != "0" && today().format("d") != "6", true)
 properties:

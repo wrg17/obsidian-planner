@@ -105,7 +105,7 @@ ago cannot be reconstructed. Only meaningful in the current week's review.
 ```base
 newItemFolder: Items
 formulas:
-  next_due: 'if(last_done, if(recur == "weekly", last_done + "1w", if(recur == "monthly", last_done + "1M", last_done + "1d")), today())'
+  next_due: 'if(last_done, if(recur == "weekly", last_done + "1w", if(recur == "monthly", last_done + "1M", if(recur == "weekdays", if(last_done.format("d") == "5", last_done + "3d", if(last_done.format("d") == "6", last_done + "2d", last_done + "1d")), last_done + "1d"))), today())'
   when: 'if(formula.next_due, formula.next_due.relative(), "")'
 views:
   - type: table

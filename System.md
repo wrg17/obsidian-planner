@@ -234,11 +234,22 @@ be answered and *Routines due* stays live. If you ever want that, the weekly rev
 For anything where being late is information: `Pay bills` monthly, a weekly backup check. These
 are `kind: routine` notes with `recur` and `last_done`. A routine is due when `last_done` plus its
 cadence has passed, so **Today → Due today** can show you it's three weeks overdue — which a
-checkbox can never do. Check one off by setting `last_done` to today in the cell; `weekdays`
-routines hide themselves on Saturday and Sunday.
+checkbox can never do. Check one off by setting `last_done` to today in the cell.
 
 `daily` and `weekdays` are still valid here — use a routine note over a checklist line whenever
 you want the overdue detection.
+
+**How `weekdays` works.** The `next_due` formula rolls forward over the weekend rather than
+adding a flat day: done Friday → due Monday, done Saturday or Sunday → due Monday. Without that,
+`last_done + "1d"` puts a Friday check-off due on Saturday, which then reads as *missed* the
+moment Sunday arrives — the exact day you would sit down to do a weekly review. On top of that,
+**Today → Due today** applies a `weekday_ok` guard so `weekdays` routines stay hidden on Saturday
+and Sunday even when genuinely overdue; the weekend is not the time to be nagged.
+
+The formula is duplicated in `Bases/Today.base`, `Templates/Area.md` and
+`Templates/Weekly Review.md`. Bases has no shared-formula mechanism, so if you change the cadence
+rules, change all three — a copy left behind produces a view that quietly disagrees with the
+others.
 
 ## Closing work
 
