@@ -73,6 +73,46 @@ adding real work.
 wrong" query. To confirm it works, set any item's `priority` to `9`; it shows up in **Invalid
 values** immediately, and reverting clears it.
 
+## Python package and API
+
+The vault is plain markdown and works with no Python at all. Alongside it, `src/planner`
+models the same rules as code, so notes can be created and validated without Obsidian
+open — and so the vault can check itself, which markdown alone cannot.
+
+```sh
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api]"
+.venv/bin/pytest                                    # 104 tests
+.venv/bin/uvicorn planner.api:app --reload          # http://127.0.0.1:8000/docs
+```
+
+`src/planner/schema.py` is the single source of truth: note kinds, their fields, and the
+vocabularies. The vault layer, the API and the generated docs all read from it, so they
+cannot drift — which is exactly how three copies of one formula once disagreed about when
+a weekday routine was due.
+
+```python
+from planner import Vault
+vault = Vault(".")
+vault.create(kind="task", title="Pick a type scale", parent="Design system")
+vault.close("Pick a type scale")        # status, done and closed move together
+vault.problems()                        # the Triage base, as a function call
+```
+
+**REST API** — Swagger UI at `/docs`, OpenAPI at `/openapi.json`:
+
+| | |
+|---|---|
+| `GET /notes` | filter by `kind`, `project`, `parent`, `status`, `open` |
+| `POST /notes` | folder derived from `kind`; defaults applied |
+| `GET·PATCH·DELETE /notes/{title}` | `null` in a PATCH removes the field |
+| `POST /notes/{title}/close` | the three fields that must move together |
+| `GET /schema` | kinds, fields and vocabularies the server enforces |
+| `GET /problems` | notes that fail to parse or validate |
+
+The API speaks plain titles, not Obsidian link syntax — send `"parent": "Design system"`
+and the storage layer writes `parent: "[[Design system]]"`. Point it at a vault with
+`PLANNER_VAULT=/path/to/vault`.
+
 ## Design notes
 
 Three constraints shaped everything, and they're worth knowing before you customise:
