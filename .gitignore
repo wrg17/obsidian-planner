@@ -31,3 +31,36 @@
 
 # macOS
 .DS_Store
+
+# Demo dataset written by demo/demo.py. Listed explicitly rather than ignoring
+# Items/*.md wholesale, because a clone is meant to track YOUR real notes in these
+# folders. Regenerate this list with `python3 demo/demo.py paths` if the dataset
+# changes. To promote a demo note into real work, delete its line here.
+#
+# The demo's weekly review is NOT listed: it is named for the current ISO week, so
+# the path moves, and any pattern matching it would also swallow your real reviews.
+# `demo.py clear` deletes it.
+/Items/Studio.md
+/Items/Household.md
+/Items/Website relaunch.md
+/Items/Kitchen refit.md
+/Items/Design system.md
+/Items/Content migration.md
+/Items/Pick a type scale.md
+/Items/Audit existing components.md
+/Items/Fix button contrast.md
+/Items/Rebuild the footer.md
+/Items/Collect reference sites.md
+/Items/Test at 320px.md
+/Items/Export old posts.md
+/Items/Proofread the about page.md
+/Items/Measure the alcove.md
+/Items/Compare worktop quotes.md
+/Items/Cancel the old delivery slot.md
+/Items/Morning review.md
+/Items/Inbox to zero.md
+/Items/Pay bills.md
+/Docs/Design system principles.md
+/Docs/Worktop options.md
+/Docs/Use system fonts.md
+/Meetings/Website kickoff.md

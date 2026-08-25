@@ -14,6 +14,7 @@ due today, something is overdue, something closed last week. Nothing here is tra
 by git; `clear` removes it and leaves a clean tree.
 """
 
+import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -356,7 +357,7 @@ NOTES = [
      "## Decision\n\nSystem font stack.\n\n## Consequences\n\nFaster, slightly less "
      "distinctive. Revisit if branding objects.\n"),
 
-    ("Meetings", f"{d(-5)} Website kickoff", {
+    ("Meetings", "Website kickoff", {
         "kind": "meeting", "date": d(-5), "project": "[[Website relaunch]]",
         "attendees": []},
      "## Agenda\n\n- Scope\n- Timeline\n\n## Notes\n\nAgreed to cut the blog redesign "
@@ -386,6 +387,7 @@ def frontmatter(fields, kind):
         else:
             lines.append(f"{key}: {value}")
     lines.append(f"created: {fields.get('created', d(-30))}")
+    lines.append("demo: true")
     lines.append("---")
     return "\n".join(lines)
 
@@ -412,7 +414,7 @@ def load():
     icon, colour = STYLE["review"]
     review.write_text(
         f"---\nkind: review\nicon: {icon}\niconColor: \"{colour}\"\n"
-        f"week: {TODAY.strftime('%G-W%V')}\ncreated: {d(0)}\n---\n\n"
+        f"week: {TODAY.strftime('%G-W%V')}\ncreated: {d(0)}\ndemo: true\n---\n\n"
         f"# {TODAY.strftime('%G-W%V')}\n\n"
         "Pinned to this note's own `week`, so it stays a record of this week rather than a\n"
         "rolling window ending today.\n\n"
@@ -440,11 +442,20 @@ def load():
 
 
 def clear():
+    """Delete every note carrying `demo: true`.
+
+    Deliberately not driven by the path list: the weekly review is named for the
+    current ISO week, so its filename moves, and any note renamed or left behind by an
+    older version of this script would otherwise be orphaned in the vault forever. The
+    frontmatter marker is the only thing that reliably identifies demo data.
+    """
     removed = 0
-    for path in paths():
-        if path.exists():
-            path.unlink()
-            removed += 1
+    for folder in ("Items", "Docs", "Meetings", "Reviews", "Journal"):
+        for path in sorted((VAULT / folder).glob("*.md")):
+            head = path.read_text(encoding="utf-8")[:400]
+            if re.search(r"^demo: true$", head, re.M):
+                path.unlink()
+                removed += 1
     print(f"removed {removed} demo notes")
 
 
@@ -454,6 +465,9 @@ if __name__ == "__main__":
         load()
     elif action == "clear":
         clear()
+    elif action == "paths":
+        for p in paths():
+            print("/" + str(p.relative_to(VAULT)))
     else:
         print(__doc__)
         sys.exit(1)
