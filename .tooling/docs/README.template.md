@@ -268,10 +268,17 @@ Every response carries `x-request-id` and `x-response-time-ms`.
 
 ### MCP
 
-Eight tools — `list_notes`, `get_note`, `create_note`, `update_note`, `close_note`,
-`delete_note`, `describe_schema`, `find_problems` — with schemas generated from the same
-vocabularies. That matters more here than for REST: a model reads the tool schema as the
-specification, and given `"type": "string"` it will confidently send `"Epic"`.
+Ten tools, with schemas generated from the same vocabularies as everything else. That
+matters more here than for REST: a model reads the tool schema as the specification, and
+given `"type": "string"` it will confidently send `"Epic"`.
+
+The tool *descriptions* are written separately from the endpoint docs on purpose — a
+model needs to know when to reach for a tool and what to call first, a developer reading
+OpenAPI needs to know what an endpoint does, and generating either from the other would
+make both worse. What must agree is the **inventory**: `COVERS` maps every tool to its
+route, `NOT_EXPOSED` records the routes deliberately left out and why, and a test fails
+on any route in neither. That check found `reopen_note` missing beside `close_note` —
+a model could close a ticket and not reopen it, which nobody had decided.
 
 ```json
 { "mcpServers": { "planner": {

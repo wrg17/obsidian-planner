@@ -117,3 +117,79 @@ class TestErrorsAreReadable:
                         {"kind": "subtask", "title": "S", "parent": "Website relaunch"},
                         populated)
         assert out["ok"] is False and out["field"] == "parent"
+
+
+class TestEveryRouteIsAccountedFor:
+    """The MCP tool list and the routing table were maintained separately and drifted:
+    eight tools against twelve routes, with nothing recording which gaps were decided.
+    `reopen_note` was missing beside `close_note`, which nobody chose.
+
+    The prose is deliberately not shared -- a model needs to know when to reach for a
+    tool, a developer needs to know what an endpoint does, and generating either from
+    the other would make both worse. It is the inventory that has to agree.
+    """
+
+    def test_no_route_is_silently_absent(self):
+        from planner.api.routes import ROUTES
+        from planner.mcp import COVERS, NOT_EXPOSED
+
+        accounted = set(COVERS.values()) | set(NOT_EXPOSED)
+        missing = [(r.method, r.path) for r in ROUTES
+                   if (r.method, r.path) not in accounted]
+        assert not missing, (
+            f"{missing} is neither exposed as a tool nor listed in NOT_EXPOSED. "
+            "Add a tool, or say why not.")
+
+    def test_every_mapping_points_at_a_real_route(self):
+        from planner.api.routes import ROUTES
+        from planner.mcp import COVERS, NOT_EXPOSED
+
+        real = {(r.method, r.path) for r in ROUTES}
+        for name, key in COVERS.items():
+            assert key in real, f"{name} maps to {key}, which is not a route"
+        for key in NOT_EXPOSED:
+            assert key in real, f"{key} is excluded but is not a route"
+
+    def test_covers_and_tools_agree(self):
+        from planner.mcp import COVERS, TOOLS
+        assert {t["name"] for t in TOOLS} == set(COVERS)
+
+    def test_an_omission_carries_a_reason(self):
+        """A blank entry would be a way to silence the test without deciding."""
+        from planner.mcp import NOT_EXPOSED
+        for key, reason in NOT_EXPOSED.items():
+            assert len(reason) > 40, f"{key} has no real justification"
+
+    def test_nothing_is_both_exposed_and_excluded(self):
+        from planner.mcp import COVERS, NOT_EXPOSED
+        assert not (set(COVERS.values()) & set(NOT_EXPOSED))
+
+
+class TestTheToolsThatWereMissing:
+    def test_reopen_is_reachable(self, populated):
+        call_tool("close_note", {"title": "Pick a type scale"}, populated)
+        out = call_tool("reopen_note", {"title": "Pick a type scale", "status": "doing"},
+                        populated)
+        assert out["ok"]
+        assert out["result"]["status"] == "doing"
+        assert out["result"]["done"] is False
+        assert "closed" not in out["result"]
+
+    def test_reopen_enforces_the_same_rules_as_rest(self, populated):
+        """Both go through NoteService, so a doc cannot be reopened either way."""
+        out = call_tool("reopen_note", {"title": "Worktop options"}, populated)
+        assert out["ok"] is False and out["field"] == "kind"
+
+    def test_children_one_level(self, populated):
+        out = call_tool("get_children", {"title": "Design system"}, populated)
+        assert {n["title"] for n in out["result"]} == {"Pick a type scale",
+                                                       "Audit existing components"}
+
+    def test_children_recursive(self, populated):
+        out = call_tool("get_children", {"title": "Website relaunch",
+                                         "recursive": True}, populated)
+        assert "Test at 320px" in {n["title"] for n in out["result"]}
+
+    def test_children_of_a_missing_note_is_an_error_not_an_empty_list(self, populated):
+        out = call_tool("get_children", {"title": "Nope"}, populated)
+        assert out["ok"] is False

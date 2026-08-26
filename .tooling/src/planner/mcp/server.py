@@ -52,6 +52,41 @@ def _kind_prop(description="The note type."):
     return {"type": "string", "enum": list(S.KIND_NAMES), "description": description}
 
 
+#: Which HTTP operation each tool corresponds to. Written down because the two lists
+#: were maintained separately and drifted -- eight tools against twelve routes, with no
+#: record of which gaps were decided and which were merely never noticed. `reopen` was
+#: the latter: a model could close a ticket and not reopen it.
+#:
+#: The descriptions themselves are deliberately NOT shared with the API. A model needs
+#: to know when to reach for a tool and what to call first; a developer reading OpenAPI
+#: needs to know what an endpoint does. Generating either from the other would make
+#: both worse. It is the inventory that has to agree, not the prose.
+COVERS = {
+    "list_notes": ("GET", "/notes"),
+    "get_note": ("GET", "/notes/{title}"),
+    "create_note": ("POST", "/notes"),
+    "update_note": ("PATCH", "/notes/{title}"),
+    "delete_note": ("DELETE", "/notes/{title}"),
+    "get_children": ("GET", "/notes/{title}/children"),
+    "close_note": ("POST", "/notes/{title}/close"),
+    "reopen_note": ("POST", "/notes/{title}/reopen"),
+    "describe_schema": ("GET", "/schema"),
+    "find_problems": ("GET", "/problems"),
+}
+
+#: Routes deliberately not exposed, and why. A route in neither this nor COVERS fails a
+#: test, so the next omission has to be an argument rather than an oversight.
+NOT_EXPOSED = {
+    ("POST", "/notes/bulk"):
+        "A model can call create_note repeatedly. Bulk adds only atomicity across the "
+        "batch, and an array-of-objects argument is a poor fit for tool calling -- more "
+        "ways to get it wrong than the guarantee is worth.",
+    ("GET", "/health"):
+        "Operational. A model has no use for liveness or the vault path, and a tool it "
+        "will never sensibly call is noise in every prompt that lists the tools.",
+}
+
+
 TOOLS = [
     {
         "name": "list_notes",
@@ -130,6 +165,39 @@ TOOLS = [
         },
     },
     {
+        "name": "get_children",
+        "description": (
+            "The notes hanging off this one. Use `recursive` for the whole subtree. "
+            "This is the query the Obsidian side cannot answer -- Bases has no joins "
+            "and no recursion -- so it is worth reaching for rather than fetching notes "
+            "one at a time and following `parent` yourself."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "recursive": {"type": "boolean", "default": False,
+                              "description": "Whole subtree rather than one level."},
+            },
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "reopen_note",
+        "description": (
+            "Reopen a closed ticket: clears `closed`, unticks `done`, and puts it back "
+            "in the status you give. The inverse of close_note, though not a full undo "
+            "-- the original closing date is gone."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "status": {"type": "string", "enum": list(S.TICKET_STATUS),
+                           "default": "todo"},
+            },
+            "required": ["title"],
+        },
+    },
+    {
         "name": "describe_schema",
         "description": (
             "The note types, which fields each allows, and the vocabularies. Call this "
@@ -182,6 +250,15 @@ def _dispatch(name, args, service):
 
     if name == "update_note":
         return service.update(args["title"], **args["changes"]).to_dict()
+
+    if name == "get_children":
+        service.get(args["title"])       # a missing note is an error, not an empty list
+        found = (service.descendants_of(args["title"]) if args.get("recursive")
+                 else service.children_of(args["title"]))
+        return [n.to_dict() for n in found]
+
+    if name == "reopen_note":
+        return service.reopen(args["title"], status=args.get("status", "todo")).to_dict()
 
     if name == "close_note":
         on = date.fromisoformat(args["on"]) if args.get("on") else None
