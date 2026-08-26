@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from fastapi import Request
+
 from ..repository.markdown import MarkdownNoteRepository
 from ..service.notes import NoteService
 
@@ -23,5 +25,33 @@ def get_repository() -> MarkdownNoteRepository:
     )
 
 
-def get_service() -> NoteService:
-    return NoteService(get_repository())
+def build_service(request=None) -> NoteService:
+    """A service whose writes are labelled for the audit log.
+
+    Done here rather than in each controller so no route can forget. The request id is
+    the one the middleware already generated, which makes an audit row traceable back
+    to the HTTP call that caused it -- and, through the access log, to everything else
+    that happened in the same request.
+
+    `request` is optional so the same factory serves callers with no HTTP request to
+    speak of -- tests, and anything wiring the service up directly. Those writes are
+    unlabelled rather than needing a fake request invented for them.
+    """
+    repository = get_repository()
+    if request is not None:
+        repository.describe(
+            summary=f"{request.method} {request.url.path}",
+            actor="rest",
+            request_id=getattr(request.state, "request_id", ""),
+        )
+    return NoteService(repository)
+
+
+def get_service(request: Request) -> NoteService:
+    """The FastAPI dependency.
+
+    A thin wrapper because FastAPI cannot inject an optional Request: annotating the
+    factory `Request | None` makes it try to build a Pydantic field out of it. Keeping
+    the two separate leaves `build_service` usable from anywhere.
+    """
+    return build_service(request)

@@ -85,11 +85,11 @@ def test_controllers_do_not_touch_the_repository():
 
 def test_both_transports_share_one_service():
     """The guarantee that REST and MCP cannot drift apart."""
-    from planner.api.dependencies import get_service
+    from planner.api.dependencies import build_service
     from planner.mcp.server import build_service
     from planner.service.notes import NoteService
 
-    assert isinstance(get_service(), NoteService)
+    assert isinstance(build_service(), NoteService)
     assert isinstance(build_service("."), NoteService)
 
 
