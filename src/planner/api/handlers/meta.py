@@ -6,17 +6,14 @@ invariants (S1-S9) documented in api/app.py.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import Depends
 
 from ...domain import schema as S
 from ...service.notes import NoteService
 from ..dependencies import get_service
 from ..schemas import KindOut, Problem, SchemaOut
 
-router = APIRouter(tags=["meta"])
 
-
-@router.get("/schema", response_model=SchemaOut, summary="Kinds, fields, vocabularies")
 def get_schema():
     """The rules this server enforces.
 
@@ -59,7 +56,6 @@ def get_schema():
     )
 
 
-@router.get("/problems", response_model=list[Problem], summary="Notes that fail to validate")
 def get_problems(service: NoteService = Depends(get_service)):
     """Every note the API would refuse to accept.
 
@@ -94,7 +90,6 @@ def get_problems(service: NoteService = Depends(get_service)):
     return [Problem(title=t, message=m) for t, m in service.problems()]
 
 
-@router.get("/health", summary="Liveness and vault reachability")
 def health(service: NoteService = Depends(get_service)):
     """Liveness, plus whether the configured vault is actually there.
 

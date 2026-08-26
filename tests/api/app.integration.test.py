@@ -247,7 +247,7 @@ class TestS7TransportParity:
 
     def test_neither_transport_holds_business_logic(self):
         """Both must delegate; a rule implemented in one would drift from the other."""
-        import planner.api.routers.notes as rest
+        import planner.api.handlers.notes as rest
         import planner.mcp.server as mcp
 
         for module in (rest, mcp):

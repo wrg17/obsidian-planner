@@ -77,7 +77,7 @@ def test_domain_does_no_file_io():
 def test_controllers_do_not_touch_the_repository():
     """Routers depend on the service. Reaching past it is how a rule ends up enforced
     on one transport and not the other."""
-    for path in (SRC / "api" / "routers").glob("*.py"):
+    for path in (SRC / "api" / "handlers").glob("*.py"):
         for module, _ in imports_in(path):
             assert "repository" not in module, \
                 f"{path.name} imports {module}; go through NoteService"

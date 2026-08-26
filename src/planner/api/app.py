@@ -100,7 +100,7 @@ from fastapi.responses import RedirectResponse
 
 from .dependencies import get_repository
 from .middleware import correlation_id, install_error_handlers
-from .routers import meta, notes
+from .routes import build_router
 
 log = logging.getLogger("planner.api")
 
@@ -176,8 +176,9 @@ def create_app() -> FastAPI:
         CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
     )
     install_error_handlers(app)
-    app.include_router(notes.router)
-    app.include_router(meta.router)
+    # One call: every endpoint is declared in routes.py, which is the file to read to
+    # learn what this API exposes.
+    app.include_router(build_router())
 
     @app.get("/", include_in_schema=False)
     def root():
