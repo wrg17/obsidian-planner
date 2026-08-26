@@ -263,13 +263,17 @@ Ten tools, with schemas generated from the same vocabularies as everything else.
 matters more here than for REST: a model reads the tool schema as the specification, and
 given `"type": "string"` it will confidently send `"Epic"`.
 
-The tool *descriptions* are written separately from the endpoint docs on purpose — a
-model needs to know when to reach for a tool and what to call first, a developer reading
-OpenAPI needs to know what an endpoint does, and generating either from the other would
-make both worse. What must agree is the **inventory**: `COVERS` maps every tool to its
-route, `NOT_EXPOSED` records the routes deliberately left out and why, and a test fails
-on any route in neither. That check found `reopen_note` missing beside `close_note` —
-a model could close a ticket and not reopen it, which nobody had decided.
+**A tool and an endpoint show the same documentation.** Both read
+`contracts/operations.py`, which holds, per operation, a one-line summary, the guidance
+someone meeting it for the first time needs, and the numbered invariants it upholds. An
+earlier version wrote the two separately, on the theory that a model and a developer want
+different things — which was wrong. A developer new to the repo does not know to read
+`GET /schema` before creating a note any more than a model does.
+
+The **inventory** has to agree too: `COVERS` maps every tool to its route, `NOT_EXPOSED`
+records the routes deliberately left out and why, and a test fails on any route in
+neither. That check found `reopen_note` missing beside `close_note` — a model could
+close a ticket and not reopen it, which nobody had decided.
 
 ```json
 { "mcpServers": { "planner": {

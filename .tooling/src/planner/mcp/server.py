@@ -20,6 +20,7 @@ from datetime import date
 from pathlib import Path
 
 from ..contracts.note import note_properties
+from ..contracts.operations import OPERATIONS
 from ..domain import schema as S
 from ..domain.errors import PlannerError
 from ..domain.note import Note
@@ -57,10 +58,13 @@ def _kind_prop(description="The note type."):
 #: record of which gaps were decided and which were merely never noticed. `reopen` was
 #: the latter: a model could close a ticket and not reopen it.
 #:
-#: The descriptions themselves are deliberately NOT shared with the API. A model needs
-#: to know when to reach for a tool and what to call first; a developer reading OpenAPI
-#: needs to know what an endpoint does. Generating either from the other would make
-#: both worse. It is the inventory that has to agree, not the prose.
+#: The descriptions are shared with the API, and this mapping is how. An earlier version
+#: wrote them twice on the theory that a model and a developer want different things --
+#: which was wrong. A developer meeting the repo for the first time does not know to
+#: read /schema before creating a note any more than a model does; the only reader that
+#: distinction fits is one who already knows the system. The result was that Swagger
+#: carried the invariants without the operational advice, and the tools carried the
+#: advice without the invariants, so each surface was missing what the other had.
 COVERS = {
     "list_notes": ("GET", "/notes"),
     "get_note": ("GET", "/notes/{title}"),
@@ -87,12 +91,24 @@ NOT_EXPOSED = {
 }
 
 
+def _description(name: str) -> str:
+    """The documentation for a tool, taken from the operation it covers.
+
+    Guidance first, then the invariants, exactly as OpenAPI shows them. It makes for a
+    long tool description -- but a model that has not been told deleting a parent is
+    refused will simply try it, and an error it could not anticipate costs more than the
+    tokens did.
+
+    Read from `contracts`, not from `api`. Both transports document the same operations,
+    and neither should have to import the other to say so.
+    """
+    return OPERATIONS[COVERS[name]].description
+
+
 TOOLS = [
     {
         "name": "list_notes",
-        "description": (
-            "List notes, optionally filtered. Returns title, kind and fields for each. "
-            "Use `open` to exclude done and cancelled work."),
+        "description": _description("list_notes"),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -106,7 +122,7 @@ TOOLS = [
     },
     {
         "name": "get_note",
-        "description": "Fetch one note by its exact title.",
+        "description": _description("get_note"),
         "inputSchema": {
             "type": "object",
             "properties": {"title": {"type": "string"}},
@@ -115,10 +131,7 @@ TOOLS = [
     },
     {
         "name": "create_note",
-        "description": (
-            "Create a note. The folder is chosen from `kind`. Links are plain titles, "
-            "not [[wikilink]] syntax. Which fields are legal depends on kind -- call "
-            "describe_schema first if unsure."),
+        "description": _description("create_note"),
         "inputSchema": {
             "type": "object",
             "properties": note_properties(),
@@ -127,8 +140,7 @@ TOOLS = [
     },
     {
         "name": "update_note",
-        "description": "Change fields on an existing note. Null removes a field. "
-                       "`kind` cannot be changed.",
+        "description": _description("update_note"),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -141,9 +153,7 @@ TOOLS = [
     },
     {
         "name": "close_note",
-        "description": (
-            "Close a ticket. Sets the status, ticks `done` and stamps `closed` in one "
-            "step -- all three must move together."),
+        "description": _description("close_note"),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -157,7 +167,7 @@ TOOLS = [
     },
     {
         "name": "delete_note",
-        "description": "Delete a note permanently.",
+        "description": _description("delete_note"),
         "inputSchema": {
             "type": "object",
             "properties": {"title": {"type": "string"}},
@@ -166,11 +176,7 @@ TOOLS = [
     },
     {
         "name": "get_children",
-        "description": (
-            "The notes hanging off this one. Use `recursive` for the whole subtree. "
-            "This is the query the Obsidian side cannot answer -- Bases has no joins "
-            "and no recursion -- so it is worth reaching for rather than fetching notes "
-            "one at a time and following `parent` yourself."),
+        "description": _description("get_children"),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -183,10 +189,7 @@ TOOLS = [
     },
     {
         "name": "reopen_note",
-        "description": (
-            "Reopen a closed ticket: clears `closed`, unticks `done`, and puts it back "
-            "in the status you give. The inverse of close_note, though not a full undo "
-            "-- the original closing date is gone."),
+        "description": _description("reopen_note"),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -199,16 +202,12 @@ TOOLS = [
     },
     {
         "name": "describe_schema",
-        "description": (
-            "The note types, which fields each allows, and the vocabularies. Call this "
-            "before creating notes if unsure which fields apply to a kind."),
+        "description": _description("describe_schema"),
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "find_problems",
-        "description": (
-            "Notes that fail to parse or validate -- misspelled statuses, out-of-range "
-            "priorities, missing frontmatter. Obsidian reports none of these itself."),
+        "description": _description("find_problems"),
         "inputSchema": {"type": "object", "properties": {}},
     },
 ]

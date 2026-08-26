@@ -4,10 +4,12 @@ Sits above the domain and below the transports: it may import the domain, and bo
 `api` and `mcp` may import it, but it knows nothing about HTTP or MCP.
 """
 
+from .operations import OPERATIONS, Operation
 from .note import (
     NoteIn, NotePatch, collapse_nullable, inline_refs, note_properties,
 )
 
 __all__ = [
     "NoteIn", "NotePatch", "note_properties", "inline_refs", "collapse_nullable",
+    "OPERATIONS", "Operation",
 ]

@@ -4,9 +4,10 @@ Controllers stay thin: translate, delegate, translate back. No business rules he
 domain errors propagate to the handlers installed in middleware.py, which is why there
 is not a try/except in sight.
 
-Each route documents the invariants it upholds. They are numbered per endpoint and
-reference the system invariants (S1-S9) in api/app.py, so a local rule can be traced
-to the principle it comes from.
+What each operation promises -- its summary, the guidance a newcomer needs, and the
+numbered invariants it upholds -- lives in `contracts/operations.py`, because the MCP
+server documents the same operations and neither transport should import the other.
+Read it alongside this file.
 """
 
 from __future__ import annotations

@@ -98,16 +98,19 @@ class TestTheSectionsMatchTheCode:
 
     def test_adding_a_route_would_change_the_output(self):
         """The property that makes generating worth it: the table cannot lag."""
-        before = docsgen.endpoints()
         from planner.api.routes import Route
-        ROUTES_PATCHED = ROUTES + (Route("GET", "/invented", lambda: None,
-                                         ("meta",), "Invented"),)
+        from planner.contracts.operations import OPERATIONS, Operation
+
+        before = docsgen.endpoints()
+        key = ("GET", "/invented")
+        OPERATIONS[key] = Operation(summary="Invented", guidance="For the test.")
         try:
-            docsgen.ROUTES = ROUTES_PATCHED
+            docsgen.ROUTES = ROUTES + (Route(*key, lambda: None, ("meta",)),)
             assert docsgen.endpoints() != before
             assert "/invented" in docsgen.endpoints()
         finally:
             docsgen.ROUTES = ROUTES
+            del OPERATIONS[key]
 
 
 class TestWhatIsNotGenerated:
