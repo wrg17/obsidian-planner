@@ -99,6 +99,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from .dependencies import get_repository
+from .docs import swagger_ui
 from .middleware import correlation_id, install_error_handlers
 from .routes import build_router
 
@@ -160,6 +161,9 @@ what this API will never itself do, and what it will tell you about afterwards.
 def create_app() -> FastAPI:
     app = FastAPI(
         lifespan=lifespan,
+        # Swagger UI is served by hand below so it can carry a theme; FastAPI would
+        # otherwise register its own /docs first and win.
+        docs_url=None,
         title="Planner",
         version="0.2.0",
         summary="Typed tickets and docs over an Obsidian vault.",
@@ -179,6 +183,10 @@ def create_app() -> FastAPI:
     # One call: every endpoint is declared in routes.py, which is the file to read to
     # learn what this API exposes.
     app.include_router(build_router())
+
+    @app.get("/docs", include_in_schema=False)
+    def docs():
+        return swagger_ui(openapi_url=app.openapi_url, title=f"{app.title} — API")
 
     @app.get("/", include_in_schema=False)
     def root():
