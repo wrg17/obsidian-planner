@@ -25,8 +25,8 @@ from pathlib import Path
 #: into tooling/, and nothing failed until notes appeared in the wrong place.
 #:
 #:     <repo root>/          the Obsidian vault
-#:       tooling/            everything that is not notes
-#:         demo/demo.py      here
+#:       .tooling/           everything that is not notes, dot-prefixed so Obsidian
+#:         demo/demo.py      never sees it -- here
 VAULT = Path(__file__).resolve().parents[2]
 TODAY = date.today()
 

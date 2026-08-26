@@ -16,7 +16,7 @@ example content you can delete.
 | `Docs/` | Specs and decision records (ADRs) |
 | `Meetings/`, `Reviews/`, `Journal/` | Meeting notes, weekly reviews, daily notes |
 | `Templates/` | 11 self-filing templates |
-| `tooling/` | Everything that is **not** notes: the Python package, its tests, the demo generator |
+| `.tooling/` | Everything that is **not** notes: the Python package, its tests, the demo generator. Dot-prefixed so Obsidian never sees it |
 | `Home.md` | Your-work dashboard |
 | `System.md` | **The manual.** How it works, the vocabularies, and every gotcha found building it |
 
@@ -55,8 +55,8 @@ nothing. That is deliberate: your planner should start as yours. But an empty vi
 view look exactly alike, so there is a throwaway dataset:
 
 ```sh
-python3 tooling/demo/demo.py load     # ~25 notes: every view populated
-python3 tooling/demo/demo.py clear    # delete exactly those again
+python3 .tooling/demo/demo.py load     # ~25 notes: every view populated
+python3 .tooling/demo/demo.py clear    # delete exactly those again
 ```
 
 **Reload Obsidian (`Cmd+R`) after either command.** Both write files behind the app's back, and
@@ -97,7 +97,7 @@ api/         FastAPI: middleware, controllers, DTOs
 mcp/         MCP tools over the same service
 ```
 
-Each layer may only import downward, and `tooling/tests/architecture.integration.test.py`
+Each layer may only import downward, and `.tooling/tests/architecture.integration.test.py`
 enforces it by parsing the imports — including that the domain never imports FastAPI, pydantic or `pathlib`.
 REST and MCP share one `NoteService`, so closing a ticket stamps `closed` on both; a
 second front end that reimplemented that rule would drift within a month.
@@ -132,7 +132,7 @@ they prove (`test_D2_deleting_a_parent_is_refused`), so a failure points at a st
 rule rather than a bare assertion.
 
 ```sh
-cd tooling
+cd .tooling
 .venv/bin/pytest                       # runs with coverage; fails under 98%
 .venv/bin/pytest tests/domain          # one layer
 .venv/bin/pytest --no-cov -q           # quick loop
