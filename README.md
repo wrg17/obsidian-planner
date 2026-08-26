@@ -81,7 +81,7 @@ open, and so the vault can check itself, which markdown alone cannot.
 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp,postgres]"
-.venv/bin/pytest                                    # 658 tests, 99% coverage
+.venv/bin/pytest                                    # 664 tests, 99% coverage
 .venv/bin/uvicorn planner.api:app --reload          # http://127.0.0.1:8000/docs
 .venv/bin/python -m planner.mcp                     # MCP server over stdio
 ```
@@ -203,9 +203,13 @@ What Postgres does *not* buy is a real transaction. `COMMIT` is a promise about 
 cannot roll back a write to the vault, and the filesystem cannot participate in
 two-phase commit. Compensation stays in the code.
 
-Rollback restores prior content by writing the old bytes back — but only while the file
-still holds what we wrote. If Obsidian changed it in between, the edit is kept and the
-rollback is left incomplete, which is the lesser harm.
+**The contract is all-or-nothing.** Rollback restores prior content by writing the old
+bytes back. One thing can break that: a file edited outside the API between our write
+and our rollback, in which case the outside edit is kept rather than overwritten. The
+exposure is ~5 ms for a single-file transaction against a ~2 s Obsidian autosave, on the
+exact file the transaction is holding — so it is close to unreachable, and is treated as
+an anomaly rather than a mode. When it does happen the operation is recorded as
+`conflicted`, never pruned, so a vault left in a mixed state says so.
 
 Three limits are documented rather than hidden — see `repository/journal.py`. The
 transaction is not *isolated* (Obsidian sees each write as it lands, including ones

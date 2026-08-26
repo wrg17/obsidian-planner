@@ -328,3 +328,21 @@ class TestCommitRecordWindow:
             repo.save(Note(kind="task", title="One"))
             repo.save(Note(kind="task", title="Two"))
         assert seen == [True]        # every write had landed before the single clear
+
+
+class TestBrokenRollbackWithoutADatabase:
+    def test_the_file_journal_can_only_shout(self, tmp_path, caplog):
+        """It keeps nothing after a transaction, so a mixed state cannot be recorded
+        here -- which is one of the things the Postgres backend is for."""
+        import logging
+        journal = Journal(tmp_path)
+        with caplog.at_level(logging.ERROR, logger="planner.repository"):
+            journal.conflicted(["Items/T.md"])
+        assert "mixed state" in caplog.text
+        assert "Items/T.md" in caplog.text
+
+    def test_it_still_clears_so_startup_does_not_re_recover(self, tmp_path):
+        journal = Journal(tmp_path)
+        journal.record(Entry("Items/T.md", None, digest(b"x"), None))
+        journal.conflicted(["Items/T.md"])
+        assert not journal.has_pending()

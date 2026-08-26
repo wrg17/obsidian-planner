@@ -342,3 +342,59 @@ class TestThroughTheRepository:
         repo.find("Tracked").write_text("edited by hand in obsidian")
         assert repo.journal.last_written("Items/Tracked.md") != \
             digest(repo.find("Tracked").read_bytes())
+
+
+class TestBrokenRollbackIsRecorded:
+    """The contract is all-or-nothing. A concurrent edit is the one thing that can
+    break it, and it is close to unreachable -- the exposure is milliseconds against a
+    two-second autosave, on the exact file the transaction holds. Precisely because it
+    should never happen, it must be impossible to miss when it does."""
+
+    def test_a_conflicted_rollback_is_marked_distinctly(self, postgresql_dsn, tmp_path):
+        for folder in ("Items", "Docs", "Meetings", "Reviews", "Journal"):
+            (tmp_path / folder).mkdir()
+        repo = MarkdownNoteRepository(tmp_path, dsn=postgresql_dsn)
+        repo.save(Note(kind="task", title="T"))
+
+        class Boom(Exception):
+            pass
+
+        with pytest.raises(Boom):
+            with repo.unit_of_work():
+                repo.save(Note(kind="task", title="T", fields={"priority": 4}))
+                (tmp_path / "Items" / "T.md").write_text("edited outside the api")
+                raise Boom()
+
+        row = repo.journal.history()[0]
+        assert row["status"] == "conflicted"          # not "rolled_back"
+        assert "not restored" in row["summary"]
+        assert "T.md" in row["summary"]
+
+    def test_a_clean_rollback_is_not_marked_conflicted(self, postgresql_dsn, tmp_path):
+        for folder in ("Items", "Docs", "Meetings", "Reviews", "Journal"):
+            (tmp_path / folder).mkdir()
+        repo = MarkdownNoteRepository(tmp_path, dsn=postgresql_dsn)
+
+        class Boom(Exception):
+            pass
+
+        with pytest.raises(Boom):
+            with repo.unit_of_work():
+                repo.save(Note(kind="task", title="Doomed"))
+                raise Boom()
+        assert repo.journal.history()[0]["status"] == "rolled_back"
+
+    def test_a_conflicted_operation_outlives_retention(self, pg_journal):
+        """Pruning never removes it. A vault left in a mixed state is the thing
+        someone asks about months later."""
+        pg_journal.begin(summary="mixed state")
+        pg_journal.record(entry())
+        pg_journal.conflicted(["Items/T.md"])
+        with pg_journal._conn.cursor() as cur:
+            cur.execute("UPDATE planner_operations SET finished_at = now()"
+                        " - interval '400 days'")
+        assert pg_journal.prune() == 0
+        assert pg_journal.history()[0]["status"] == "conflicted"
+
+    def test_conflicted_without_an_open_operation_is_harmless(self, pg_journal):
+        pg_journal.conflicted(["Items/T.md"])

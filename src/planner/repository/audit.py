@@ -38,6 +38,15 @@ class JournalBackend(Protocol):
     def rollback(self) -> None:
         """Mark the operation abandoned. The caller has already undone it in memory."""
 
+    def conflicted(self, paths) -> None:
+        """Mark the operation as having failed to roll back cleanly.
+
+        Distinct from `rollback` because the vault is left in a mixed state: some
+        files restored, some holding content written outside this process. The
+        all-or-nothing contract was broken, and the record has to outlive the request
+        that broke it.
+        """
+
     def recover(self) -> RecoveryReport:
         """Undo any operation an earlier process left in flight."""
 

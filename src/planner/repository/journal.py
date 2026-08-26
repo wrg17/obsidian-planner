@@ -74,11 +74,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+log = logging.getLogger("planner.repository")
 
 JOURNAL_NAME = ".planner-journal.json"
 
@@ -159,6 +162,14 @@ class Journal:
         self.clear()
 
     def rollback(self) -> None:
+        self.clear()
+
+    def conflicted(self, paths) -> None:
+        """A file journal keeps nothing after a transaction, so a mixed state can only
+        be logged here, not recorded. Use the Postgres backend if you need the
+        anomaly to survive the process -- that is one of the things it is for."""
+        log.error("rollback left the vault in a mixed state; these files hold content "
+                  "written outside this process and were not restored: %s", paths)
         self.clear()
 
     def has_pending(self) -> bool:

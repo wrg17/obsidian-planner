@@ -143,6 +143,21 @@ class PostgresJournal:
                 " WHERE id = %s", (status, self._operation_id))
         self._operation_id = None
 
+    def conflicted(self, paths) -> None:
+        """Record that the rollback could not complete.
+
+        Kept forever -- `prune` never touches a conflicted row. A vault left in a
+        mixed state is exactly the thing someone will ask about months later.
+        """
+        if self._operation_id is None:
+            return
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "UPDATE planner_operations SET status = 'conflicted',"
+                " finished_at = now(), summary = summary || %s WHERE id = %s",
+                (f" [not restored: {', '.join(paths)}]", self._operation_id))
+        self._operation_id = None
+
     def has_pending(self) -> bool:
         with self._conn.cursor() as cur:
             cur.execute(

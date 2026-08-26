@@ -21,6 +21,9 @@ class InMemoryRepository:
         self.saved = {}
 
 
+    def conflicted(self, paths):
+        pass
+
     def describe(self, summary="", actor="", request_id=""):
         pass
 

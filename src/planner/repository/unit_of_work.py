@@ -17,12 +17,20 @@ Two limits, stated rather than hidden:
                  back. Nothing short of a lock file would change that, and locking a
                  vault the user is editing is worse than the flicker.
 
-                 A consequence worth stating: because writes are visible, they can be
-                 edited before the rollback reaches them. Undo therefore checks that a
-                 file still holds what we wrote before restoring it, and leaves it
-                 alone otherwise -- the same rule crash recovery applies. A rollback
-                 that destroyed someone's edit to tidy up after a transaction they
-                 never knew about would be worse than an incomplete rollback.
+                 A consequence, and an anomaly rather than a second mode: because
+                 writes are visible they can in principle be edited before the
+                 rollback reaches them. Undo therefore checks that a file still holds
+                 what we wrote, and leaves it alone otherwise.
+
+                 The contract is all-or-nothing. This is the one thing that can break
+                 it, and it is close to unreachable: the exposure is ~5ms for a
+                 single-file transaction and ~96ms for twenty, against an Obsidian
+                 autosave that fires after ~2s of idle -- and the save has to land on
+                 the very file the transaction is holding. Do not design around it.
+                 Do make it impossible to miss when it happens: the operation is
+                 recorded as `conflicted` rather than `rolled_back`, so a vault left
+                 in a mixed state says so instead of being inferred from a log line
+                 nobody read.
 
   DURABLE, WITH A JOURNAL
                  Given one, intent is flushed to disk before each change lands, so a
@@ -135,7 +143,13 @@ class UnitOfWork:
                 # next startup "recover" a transaction already dealt with -- but the
                 # audit log wants to know which of the two happened, because "we tried
                 # this and backed out" is worth keeping.
-                if failed:
+                if failed and self.conflicts:
+                    # The rollback could not complete: something outside this process
+                    # holds one of the files. All-or-nothing was broken, and that has
+                    # to survive the request rather than living in a log line.
+                    self._journal.conflicted(
+                        [str(c.path) for c in self.conflicts])
+                elif failed:
                     self._journal.rollback()
                 else:
                     self._journal.commit()
