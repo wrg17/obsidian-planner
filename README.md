@@ -73,45 +73,77 @@ adding real work.
 wrong" query. To confirm it works, set any item's `priority` to `9`; it shows up in **Invalid
 values** immediately, and reverting clears it.
 
-## Python package and API
+## Python package, API and MCP
 
 The vault is plain markdown and works with no Python at all. Alongside it, `src/planner`
-models the same rules as code, so notes can be created and validated without Obsidian
-open — and so the vault can check itself, which markdown alone cannot.
+models the same rules as code — so notes can be created and validated without Obsidian
+open, and so the vault can check itself, which markdown alone cannot.
 
 ```sh
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api]"
-.venv/bin/pytest                                    # 104 tests
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp]"
+.venv/bin/pytest                                    # 172 tests
 .venv/bin/uvicorn planner.api:app --reload          # http://127.0.0.1:8000/docs
+.venv/bin/python -m planner.mcp                     # MCP server over stdio
 ```
 
-`src/planner/schema.py` is the single source of truth: note kinds, their fields, and the
-vocabularies. The vault layer, the API and the generated docs all read from it, so they
-cannot drift — which is exactly how three copies of one formula once disagreed about when
-a weekday routine was due.
+### Layers
+
+```
+domain/      entities, vocabularies, validation   — no IO, no framework
+repository/  persistence port + markdown adapter
+service/     business rules, transport-agnostic
+api/         FastAPI: middleware, controllers, DTOs
+mcp/         MCP tools over the same service
+```
+
+Each layer may only import downward, and `tests/test_layering.py` enforces it by parsing
+the imports — including that the domain never imports FastAPI, pydantic or `pathlib`.
+REST and MCP share one `NoteService`, so closing a ticket stamps `closed` on both; a
+second front end that reimplemented that rule would drift within a month.
 
 ```python
-from planner import Vault
-vault = Vault(".")
-vault.create(kind="task", title="Pick a type scale", parent="Design system")
-vault.close("Pick a type scale")        # status, done and closed move together
-vault.problems()                        # the Triage base, as a function call
+from planner import open_vault
+service = open_vault(".")
+service.create(kind="task", title="Pick a type scale", parent="Design system")
+service.close("Pick a type scale")      # status, done and closed move together
+service.problems()                      # the Triage base, as a function call
 ```
 
-**REST API** — Swagger UI at `/docs`, OpenAPI at `/openapi.json`:
+### REST
+
+Swagger UI at `/docs`, OpenAPI at `/openapi.json`.
 
 | | |
 |---|---|
 | `GET /notes` | filter by `kind`, `project`, `parent`, `status`, `open` |
 | `POST /notes` | folder derived from `kind`; defaults applied |
 | `GET·PATCH·DELETE /notes/{title}` | `null` in a PATCH removes the field |
-| `POST /notes/{title}/close` | the three fields that must move together |
-| `GET /schema` | kinds, fields and vocabularies the server enforces |
-| `GET /problems` | notes that fail to parse or validate |
+| `GET /notes/{title}/children` | `?recursive=true` for the whole subtree |
+| `POST /notes/{title}/close` · `/reopen` | the three fields that must move together |
+| `GET /schema` · `/problems` · `/health` | rules, triage, liveness |
 
-The API speaks plain titles, not Obsidian link syntax — send `"parent": "Design system"`
-and the storage layer writes `parent: "[[Design system]]"`. Point it at a vault with
-`PLANNER_VAULT=/path/to/vault`.
+Vocabularies are **declared enums**, not prose. `kind` is a `$ref` to a ten-value enum
+generated from the domain, so `"Epic"` fails at the contract rather than deep inside —
+and Swagger renders a dropdown. Both validation layers return the same `{detail, field}`
+error shape, since which one fired is an implementation detail.
+
+Links are plain titles: send `"parent": "Design system"` and storage writes
+`parent: "[[Design system]]"`. Point at a vault with `PLANNER_VAULT=/path/to/vault`.
+Every response carries `x-request-id` and `x-response-time-ms`.
+
+### MCP
+
+Eight tools — `list_notes`, `get_note`, `create_note`, `update_note`, `close_note`,
+`delete_note`, `describe_schema`, `find_problems` — with schemas generated from the same
+vocabularies. That matters more here than for REST: a model reads the tool schema as the
+specification, and given `"type": "string"` it will confidently send `"Epic"`.
+
+```json
+{ "mcpServers": { "planner": {
+    "command": "/path/to/planner/.venv/bin/python",
+    "args": ["-m", "planner.mcp"],
+    "env": { "PLANNER_VAULT": "/path/to/planner" } } } }
+```
 
 ## Design notes
 

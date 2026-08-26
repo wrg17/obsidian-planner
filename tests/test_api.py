@@ -148,7 +148,95 @@ class TestProblems:
         assert client.get("/problems").json() == []
 
     def test_reports_a_hand_edited_typo(self, client, populated):
-        (populated.root / "Items" / "Typo.md").write_text(
+        (populated.repo.root / "Items" / "Typo.md").write_text(
             "---\nkind: task\nstatus: in-progress\n---\n")
         found = client.get("/problems").json()
         assert any(p["title"] == "Typo" for p in found)
+
+
+class TestEnumContract:
+    """The gap this refactor closed: allowed values used to live only in prose, so
+    the document declared `"type": "string"` and a generated client got nothing."""
+
+    def test_kind_is_a_declared_enum(self, client):
+        doc = client.get("/openapi.json").json()
+        ref = doc["components"]["schemas"]["NoteIn"]["properties"]["kind"]["$ref"]
+        name = ref.rsplit("/", 1)[-1]
+        assert doc["components"]["schemas"][name]["enum"] == [
+            "area", "project", "epic", "task", "subtask", "routine",
+            "doc", "decision", "meeting", "review"]
+
+    def test_enums_come_from_the_domain(self, client):
+        from planner.domain import ISSUE_TYPE
+        doc = client.get("/openapi.json").json()
+        found = {name: s["enum"] for name, s in doc["components"]["schemas"].items()
+                 if "enum" in s}
+        assert list(ISSUE_TYPE) in found.values()
+
+    @pytest.mark.parametrize("bad", ["Epic", "EPIC", "epicc", " epic "])
+    def test_misspelling_or_miscasing_kind_is_rejected(self, client, bad):
+        r = client.post("/notes", json={"kind": bad, "title": "X"})
+        assert r.status_code == 422
+        assert r.json()["field"] == "kind"
+
+    @pytest.mark.parametrize("field,bad", [
+        ("status", "Doing"), ("type", "Bug"), ("recur", "Daily")])
+    def test_vocabulary_casing_is_rejected_with_the_field(self, client, field, bad):
+        kind = "routine" if field == "recur" else "task"
+        r = client.post("/notes", json={"kind": kind, "title": "X", field: bad})
+        assert r.status_code == 422 and r.json()["field"] == field
+
+    def test_one_error_shape_for_both_layers(self, client):
+        """A DTO rejection and a domain rejection must look the same to a client --
+        which of the two fired is an implementation detail."""
+        from_dto = client.post("/notes", json={"kind": "task", "title": "A",
+                                               "status": "Doing"}).json()
+        from_domain = client.post("/notes", json={"kind": "meeting", "title": "B",
+                                                  "status": "todo"}).json()
+        assert set(from_dto) == set(from_domain) == {"detail", "field"}
+
+
+class TestMiddleware:
+    def test_request_id_is_returned(self, client):
+        assert client.get("/notes").headers["x-request-id"]
+
+    def test_supplied_request_id_is_echoed(self, client):
+        r = client.get("/notes", headers={"x-request-id": "abc123"})
+        assert r.headers["x-request-id"] == "abc123"
+
+    def test_timing_header(self, client):
+        assert float(client.get("/notes").headers["x-response-time-ms"]) >= 0
+
+    def test_errors_carry_the_request_id_too(self, client):
+        r = client.get("/notes/Nope", headers={"x-request-id": "trace-me"})
+        assert r.status_code == 404 and r.headers["x-request-id"] == "trace-me"
+
+
+class TestHierarchy:
+    def test_direct_children(self, client):
+        body = client.get("/notes/Design system/children").json()
+        assert [n["title"] for n in body] == ["Pick a type scale"]
+
+    def test_recursive_children(self, client):
+        body = client.get("/notes/Design system/children",
+                          params={"recursive": True}).json()
+        assert {n["title"] for n in body} == {"Pick a type scale", "Test at 320px"}
+
+    def test_missing_parent_is_404_not_an_empty_list(self, client):
+        assert client.get("/notes/Nope/children").status_code == 404
+
+
+class TestReopen:
+    def test_clears_closed_and_done(self, client):
+        client.post("/notes/Pick a type scale/close")
+        body = client.post("/notes/Pick a type scale/reopen",
+                           params={"status": "doing"}).json()
+        assert body["status"] == "doing"
+        assert body["done"] is False
+        assert "closed" not in body
+
+
+class TestHealth:
+    def test_reports_the_vault(self, client):
+        body = client.get("/health").json()
+        assert body["status"] == "ok" and body["vault"]

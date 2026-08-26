@@ -13,7 +13,8 @@ through the API.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
+from enum import StrEnum
 
 # --- vocabularies -----------------------------------------------------------------
 
@@ -107,6 +108,27 @@ KINDS: dict[str, Kind] = {
 
 KIND_NAMES = tuple(KINDS)
 TICKET_KINDS = ("epic", "task", "subtask")
+
+# --- enums ------------------------------------------------------------------------
+#
+# Generated from the tuples above rather than written out again. A hand-maintained
+# second copy is how the OpenAPI document ends up promising something the validator
+# does not enforce -- and for an MCP client that gap is worse than a missing check,
+# because a model reads the tool schema as the truth and will confidently send
+# "Epic" if nothing says otherwise.
+
+KindEnum = StrEnum("KindEnum", {k.upper(): k for k in KIND_NAMES})
+IssueTypeEnum = StrEnum("IssueTypeEnum", {v.upper(): v for v in ISSUE_TYPE})
+RecurEnum = StrEnum("RecurEnum", {v.upper(): v for v in RECUR})
+
+#: Every status any kind may take. Which subset applies depends on the kind, and that
+#: is enforced in the domain -- but declaring the union still beats a bare string.
+ALL_STATUS = tuple(dict.fromkeys(
+    TICKET_STATUS + CONTAINER_STATUS + ROUTINE_STATUS + DOC_STATUS + DECISION_STATUS))
+StatusEnum = StrEnum("StatusEnum", {v.upper().replace("-", "_"): v for v in ALL_STATUS})
+
+#: Statuses that close a ticket, as an enum for the close endpoint.
+ClosingStatusEnum = StrEnum("ClosingStatusEnum", {v.upper(): v for v in CLOSED_STATUS})
 
 
 def allowed_fields(kind: str) -> tuple[str, ...]:

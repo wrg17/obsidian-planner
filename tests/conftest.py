@@ -3,16 +3,23 @@ from datetime import date
 
 import pytest
 
-from planner import Vault
-from planner.vault import CONTENT_FOLDERS
+from planner import MarkdownNoteRepository, NoteService
+from planner.repository import CONTENT_FOLDERS
 
 
 @pytest.fixture
-def vault(tmp_path):
+def repo(tmp_path):
     """An empty vault with the folder layout the real one has."""
     for folder in CONTENT_FOLDERS:
         (tmp_path / folder).mkdir()
-    return Vault(tmp_path)
+    return MarkdownNoteRepository(tmp_path)
+
+
+@pytest.fixture
+def vault(repo):
+    """The service, which is what callers actually use. Named `vault` because that is
+    what the tests read as: the thing you do planner things to."""
+    return NoteService(repo)
 
 
 @pytest.fixture
@@ -41,6 +48,6 @@ def client(populated, monkeypatch):
     from fastapi.testclient import TestClient
     from planner.api import app
 
-    monkeypatch.setenv("PLANNER_VAULT", str(populated.root))
+    monkeypatch.setenv("PLANNER_VAULT", str(populated.repo.root))
     with TestClient(app) as c:
         yield c

@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from planner import Note, ValidationError
-from planner.note import unwrap_link, wrap_link
+from planner.domain.note import unwrap_link, wrap_link
 
 
 class TestLinks:

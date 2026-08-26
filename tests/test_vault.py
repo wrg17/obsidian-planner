@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from planner import NoteExists, NoteNotFound, ValidationError
-from planner.schema import KINDS
+from planner.domain.schema import KINDS
 
 
 class TestCreate:
@@ -15,7 +15,7 @@ class TestCreate:
         same rule when you create a note by hand; two mechanisms disagreeing about
         where a doc lives is how notes go missing."""
         vault.create(kind=kind, title=f"A {kind}")
-        assert (vault.root / folder / f"A {kind}.md").is_file()
+        assert (vault.repo.root / folder / f"A {kind}.md").is_file()
 
     def test_defaults_are_applied(self, vault):
         note = vault.create(kind="task", title="T")
@@ -86,14 +86,14 @@ class TestRead:
     def test_malformed_notes_are_skipped_not_raised(self, populated):
         """A vault is hand-editable text; a broken note is an expected state, not an
         exception that should take down a listing."""
-        (populated.root / "Items" / "Broken.md").write_text("no frontmatter here")
+        (populated.repo.root / "Items" / "Broken.md").write_text("no frontmatter here")
         assert "Broken" not in [n.title for n in populated.list()]
 
 
 class TestProblems:
     def test_reports_malformed_and_invalid(self, populated):
-        (populated.root / "Items" / "Broken.md").write_text("no frontmatter")
-        (populated.root / "Items" / "Typo.md").write_text(
+        (populated.repo.root / "Items" / "Broken.md").write_text("no frontmatter")
+        (populated.repo.root / "Items" / "Typo.md").write_text(
             "---\nkind: task\nstatus: in-progress\n---\n")
         found = dict(populated.problems())
         assert "Broken" in found
