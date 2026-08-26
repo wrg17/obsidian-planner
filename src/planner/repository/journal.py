@@ -148,6 +148,22 @@ class Journal:
 
     # --- recording ----------------------------------------------------------------
 
+    def begin(self, summary: str = "", actor: str = "", request_id: str = "") -> None:
+        """No-op: a file journal records only what is in flight, so there is nothing to
+        open. The arguments exist so the two backends share one interface -- the
+        Postgres one keeps them as audit metadata."""
+
+    def commit(self) -> None:
+        """Nothing to keep. See the module docstring: a finished transaction leaves no
+        trace here, which is precisely the gap the Postgres backend fills."""
+        self.clear()
+
+    def rollback(self) -> None:
+        self.clear()
+
+    def has_pending(self) -> bool:
+        return self.path.is_file()
+
     def record(self, entry: Entry) -> None:
         """Append an entry and flush it to disk before the change is applied.
 

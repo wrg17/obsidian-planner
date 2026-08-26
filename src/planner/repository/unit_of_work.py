@@ -30,7 +30,7 @@ from __future__ import annotations
 import logging
 
 from .commands import Command, CommandError
-from .journal import Journal
+from .journal import Journal  # noqa: F401 - type only
 
 log = logging.getLogger("planner.repository")
 
@@ -53,11 +53,15 @@ class RollbackError(CommandError):
 
 
 class UnitOfWork:
-    def __init__(self, journal: Journal | None = None):
+    def __init__(self, journal=None, summary: str = "", actor: str = "",
+                 request_id: str = ""):
         self._done: list[Command] = []
         self._depth = 0
         self._failed = False
         self._journal = journal
+        self._summary = summary
+        self._actor = actor
+        self._request_id = request_id
 
     # --- participation ------------------------------------------------------------
 
@@ -73,6 +77,8 @@ class UnitOfWork:
         operation is routine. An inner transaction committing independently would let
         half an outer operation survive its failure.
         """
+        if self._depth == 0 and self._journal is not None:
+            self._journal.begin(self._summary, self._actor, self._request_id)
         self._depth += 1
         return self
 
@@ -105,6 +111,7 @@ class UnitOfWork:
         self._depth -= 1
         if exc is not None:
             self._failed = True
+        failed = self._failed
         if self._depth > 0:
             return False                # inner scope: outcome is the outer one's call
         try:
@@ -114,11 +121,16 @@ class UnitOfWork:
             self._done.clear()
             self._failed = False
             if self._journal is not None:
-                # Cleared on both paths: after a commit there is nothing to recover,
-                # and after an in-process rollback the vault is already back where it
-                # started. A journal left behind would make the next startup "recover"
-                # a transaction that has already been dealt with.
-                self._journal.clear()
+                # Closed on both paths, but distinguishably. After a commit there is
+                # nothing to recover; after an in-process rollback the vault is already
+                # back where it started. Either way a journal left open would make the
+                # next startup "recover" a transaction already dealt with -- but the
+                # audit log wants to know which of the two happened, because "we tried
+                # this and backed out" is worth keeping.
+                if failed:
+                    self._journal.rollback()
+                else:
+                    self._journal.commit()
         return False                    # never swallow the original exception
 
     def rollback(self, cause: BaseException | None = None) -> None:

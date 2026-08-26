@@ -80,8 +80,8 @@ models the same rules as code — so notes can be created and validated without 
 open, and so the vault can check itself, which markdown alone cannot.
 
 ```sh
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp]"
-.venv/bin/pytest                                    # 588 tests, 99% coverage
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp,postgres]"
+.venv/bin/pytest                                    # 646 tests, 99% coverage
 .venv/bin/uvicorn planner.api:app --reload          # http://127.0.0.1:8000/docs
 .venv/bin/python -m planner.mcp                     # MCP server over stdio
 ```
@@ -180,6 +180,28 @@ The last row is the one that matters: a change we cannot account for can only ha
 from a person editing their own notes, and their edit is newer than our abandoned
 transaction. `GET /health` reports an interrupted transaction so the condition is never
 silent.
+
+### Audit log
+
+Set `PLANNER_DSN` and every operation is recorded in Postgres — what changed, at whose
+request, and how it ended (`committed · rolled_back · recovered · conflicted`). Because
+each row keeps the prior content, the log serves three purposes at once: crash recovery
+reads the in-flight rows, provenance compares the last committed hash for a path against
+the file to tell your writes from Obsidian's, and history gives an undo stack.
+
+Committed operations are pruned after 30 days — `prior_content` grows with the volume of
+text edited, not the number of operations. Anything that *didn't* go cleanly is kept
+indefinitely: it is evidence, and the reason to keep a log is to still have it when
+someone asks.
+
+**If Postgres is unreachable the API degrades to the file journal and keeps working.** A
+database being down is not a reason you cannot write a note in your own vault. Crash
+recovery is unaffected; the cost is a gap in the audit trail, and it is logged as a gap
+rather than passed over.
+
+What Postgres does *not* buy is a real transaction. `COMMIT` is a promise about rows; it
+cannot roll back a write to the vault, and the filesystem cannot participate in
+two-phase commit. Compensation stays in the code.
 
 Three limits are documented rather than hidden — see `repository/journal.py`. The
 transaction is not *isolated* (Obsidian sees each write as it lands, including ones

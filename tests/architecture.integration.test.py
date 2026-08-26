@@ -104,6 +104,9 @@ def test_repository_is_swappable():
         def __init__(self):
             self.saved = {}
 
+        def describe(self, summary="", actor="", request_id=""):
+            pass
+
         def has_pending_transaction(self):
             return False
 

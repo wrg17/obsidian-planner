@@ -21,6 +21,9 @@ class InMemoryRepository:
         self.saved = {}
 
 
+    def describe(self, summary="", actor="", request_id=""):
+        pass
+
     def has_pending_transaction(self):
         return False
 
@@ -90,7 +93,7 @@ class TestConformance:
 
     @pytest.mark.parametrize("method", [
         "get", "exists", "titles", "iter_all", "iter_raw", "save", "delete",
-        "unit_of_work", "has_pending_transaction"])
+        "unit_of_work", "has_pending_transaction", "describe"])
     def test_port_declares_the_whole_surface(self, method):
         assert hasattr(NoteRepository, method)
 

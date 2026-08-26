@@ -49,6 +49,10 @@ class NoteRepository(Protocol):
     def delete(self, title: str) -> None:
         """Raises NoteNotFound."""
 
+    def describe(self, summary: str = "", actor: str = "", request_id: str = ""):
+        """Label the next transaction for the audit log. No-op for backends without
+        one; the file journal keeps nothing after a transaction finishes."""
+
     def has_pending_transaction(self) -> bool:
         """True when an interrupted transaction is awaiting recovery.
 

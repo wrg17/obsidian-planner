@@ -21,7 +21,8 @@ from ..domain import schema
 from ..domain.errors import NoteNotFound, ValidationError
 from ..domain.note import Note
 from .commands import CreateDirectory, DeleteFile, WriteFile
-from .journal import Journal, RecoveryReport
+from .audit import resolve_journal
+from .journal import RecoveryReport
 from .unit_of_work import UnitOfWork
 
 def _names_in(directory: Path) -> set[str]:
@@ -39,20 +40,34 @@ CONTENT_FOLDERS = ("Items", "Docs", "Meetings", "Reviews", "Journal")
 
 
 class MarkdownNoteRepository:
-    def __init__(self, root: str | Path):
+    def __init__(self, root: str | Path, dsn: str | None = None):
         self.root = Path(root)
         # An ambient transaction rather than one passed to every call. The service
         # already reads as `self.repo.save(...)`; threading a uow argument through
         # every one of those would put transaction plumbing in the layer that is
         # supposed to be about rules. Safe because dependencies.get_repository builds
         # a fresh repository per request, so this is never shared across callers.
-        self.journal = Journal(self.root)
+        # Postgres when reachable, the file journal otherwise. Degrading is
+        # deliberate: a database being down is not a reason someone cannot write a
+        # note in their own vault. The cost is a gap in the audit trail, and it is
+        # logged as a gap rather than passed over in silence.
+        self.journal = resolve_journal(self.root, dsn)
         self._uow = UnitOfWork(self.journal)
+
+    def describe(self, summary: str = "", actor: str = "", request_id: str = "") -> None:
+        """Attach audit metadata to the next transaction.
+
+        Set before opening the unit of work, because the operation row is inserted
+        when the transaction opens -- after that there is nothing left to label.
+        """
+        self._uow._summary = summary
+        self._uow._actor = actor
+        self._uow._request_id = request_id
 
     def has_pending_transaction(self) -> bool:
         """True when a journal is on disk, i.e. a transaction was interrupted and
         recovery has not run or could not finish."""
-        return self.journal.path.is_file()
+        return self.journal.has_pending()
 
     def recover(self) -> RecoveryReport:
         """Undo any transaction abandoned by a crash. Safe to call at any time.
