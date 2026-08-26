@@ -1,3 +1,8 @@
+<!-- This is the source for ../../README.md. Edit here, then run
+     `python -m planner.docsgen --write` from .tooling/.
+     The rendered README carries no markers, because it sits in the vault and
+     Obsidian shows anything that is not a %%comment%%. -->
+
 # Planner — Jira + Confluence in an Obsidian vault
 
 A starter vault that gives you typed tickets, a kanban-style board, project/epic/task hierarchy,
@@ -89,6 +94,7 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp,postgres]"
 
 ### Layers
 
+<!-- generated:layers -->
 ```
 api/         FastAPI: routes, middleware, controllers, DTOs
 contracts/   wire shapes shared by every transport
@@ -97,6 +103,7 @@ mcp/         MCP tools over the same service
 repository/  persistence port, markdown adapter, reversible commands, unit of work, journals
 service/     business rules, transport-agnostic
 ```
+<!-- /generated:layers -->
 
 Each layer may only import downward, and `.tooling/tests/architecture.integration.test.py`
 enforces it by parsing the imports — including that the domain never imports FastAPI, pydantic or `pathlib`.
@@ -166,6 +173,7 @@ starting a real stdio server; the dispatch it calls is tested directly.
 
 Swagger UI at `/docs`, OpenAPI at `/openapi.json`.
 
+<!-- generated:endpoints -->
 | | |
 |---|---|
 | `GET /notes` | List notes |
@@ -180,6 +188,7 @@ Swagger UI at `/docs`, OpenAPI at `/openapi.json`.
 | `GET /schema` | Kinds, fields, vocabularies |
 | `GET /problems` | Notes that fail to validate |
 | `GET /health` | Liveness and vault reachability |
+<!-- /generated:endpoints -->
 | `POST /notes` | folder derived from `kind`; defaults applied |
 | `POST /notes/bulk` | a batch as one transaction — all of them or none |
 | `GET·PATCH·DELETE /notes/{title}` | `null` in a PATCH removes the field |

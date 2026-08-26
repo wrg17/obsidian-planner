@@ -12,11 +12,23 @@ endpoints when routes.py declared twelve, and claimed 664 tests when there were 
 Neither was neglect: they were edited by hand every time the code changed, and hand
 editing is exactly the process that loses.
 
-Sections are delimited so the surrounding prose stays hand-written:
+Both files live inside the vault, which constrains how the sections can be delimited --
+Obsidian shows anything it does not recognise as a comment, and it recognises `%%`, not
+HTML. So the two are handled differently, according to who reads them:
 
-    <!-- generated:endpoints -->
-    ...replaced wholesale...
-    <!-- /generated:endpoints -->
+    System.md      edited in place, markers written as %%generated:name%%
+                   It is a note. Someone reads and edits it inside Obsidian, so it has
+                   to stay directly editable, and `%%` is invisible there.
+
+    README.md      generated whole from .tooling/docs/README.template.md
+                   It is a repository document that happens to sit in the vault. The
+                   template carries the markers and lives outside the vault; the file
+                   Obsidian sees is finished output with no markers in it at all.
+                   Edit the template, not the README.
+
+The first attempt put HTML comments in both, and they showed up as literal text in
+Obsidian's Live Preview -- in the manual, which is the one file guaranteed to be read
+in the app.
 
 A test runs --check, so a stale file fails the suite rather than being noticed by a
 reader who then believes it.
@@ -33,11 +45,17 @@ from .domain import schema as S
 
 REPO = Path(__file__).resolve().parents[3]
 
-#: Matches the whole block including both markers. The body is allowed to be empty --
-#: which it is the first time a marker is added, and a pattern that required content
-#: there would silently never fill it in.
+#: HTML comments for files read on GitHub, `%%` for files read in Obsidian. The body is
+#: allowed to be empty -- which it is the first time a marker is added, and a pattern
+#: requiring content there would silently never fill it in.
+STYLES = {
+    "html": ("<!-- generated:{name} -->", "<!-- /generated:{name} -->"),
+    "obsidian": ("%%generated:{name}%%", "%%/generated:{name}%%"),
+}
+
 MARKER = re.compile(
-    r"<!-- generated:(?P<name>[\w-]+) -->.*?<!-- /generated:(?P=name) -->", re.S)
+    r"(?:<!-- generated:(?P<html>[\w-]+) -->.*?<!-- /generated:(?P=html) -->)"
+    r"|(?:%%generated:(?P<obs>[\w-]+)%%.*?%%/generated:(?P=obs)%%)", re.S)
 
 
 # --- the generated sections ---------------------------------------------------------
@@ -113,20 +131,42 @@ SECTIONS = {
     "kinds": kinds,
 }
 
-FILES = ("README.md", "System.md")
+#: Edited in place: the markers stay in the file.
+FILES = ("System.md",)
+
+#: Rendered whole from a template outside the vault. The output carries no markers,
+#: because it is read in Obsidian and anything that is not a `%%` comment is visible.
+TEMPLATES = {"README.md": Path(".tooling") / "docs" / "README.template.md"}
+
+#: A template may open with a comment addressed to whoever edits it. That is a note
+#: about the template, not part of the document, so it is dropped on render.
+TEMPLATE_HEADER = re.compile(r"\A<!--.*?-->\s*", re.S)
+
+
+def render_template(text: str) -> str:
+    return render(TEMPLATE_HEADER.sub("", text), keep_markers=False)
 
 
 # --- rendering ----------------------------------------------------------------------
 
-def render(text: str) -> str:
-    """Replace every delimited section, leaving the prose around it alone."""
+def render(text: str, *, keep_markers: bool = True) -> str:
+    """Replace every delimited section, leaving the prose around it alone.
+
+    `keep_markers=False` drops the delimiters from the output, for a file rendered
+    whole from a template -- the reader of that file never edits it, so a marker would
+    be noise, and in Obsidian it would be *visible* noise.
+    """
     def substitute(match):
-        name = match.group("name")
+        style = "html" if match.group("html") else "obsidian"
+        name = match.group("html") or match.group("obs")
         if name not in SECTIONS:
             raise KeyError(f"no generator named {name!r}")
-        return (f"<!-- generated:{name} -->\n"
+        if not keep_markers:
+            return SECTIONS[name]()
+        opening, closing = STYLES[style]
+        return (opening.format(name=name) + "\n"
                 + SECTIONS[name]()
-                + f"\n<!-- /generated:{name} -->")
+                + "\n" + closing.format(name=name))
 
     return MARKER.sub(substitute, text)
 
@@ -147,6 +187,13 @@ def stale(root: Path | None = None) -> list[str]:
         current = path.read_text()
         if render(current) != current:
             out.append(name)
+    for name, template in TEMPLATES.items():
+        source, target = root / template, root / name
+        if not source.exists():
+            continue
+        expected = render_template(source.read_text())
+        if not target.exists() or target.read_text() != expected:
+            out.append(name)
     return out
 
 
@@ -162,6 +209,14 @@ def write(root: Path | None = None) -> list[str]:
         updated = render(current)
         if updated != current:
             path.write_text(updated)
+            changed.append(name)
+    for name, template in TEMPLATES.items():
+        source, target = root / template, root / name
+        if not source.exists():
+            continue
+        expected = render_template(source.read_text())
+        if not target.exists() or target.read_text() != expected:
+            target.write_text(expected)
             changed.append(name)
     return changed
 

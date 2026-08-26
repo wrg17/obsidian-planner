@@ -45,7 +45,7 @@ Do these once, in order.
 Every note carries `kind`. That field is what makes types real to Bases — filters and views key
 off it.
 
-<!-- generated:kinds -->
+%%generated:kinds%%
 | Kind | Folder | Own fields |
 |---|---|---|
 | `area` | `Items/` | `status` |
@@ -58,7 +58,7 @@ off it.
 | `decision` | `Docs/` | `status`, `project`, `date`, `supersedes` |
 | `meeting` | `Meetings/` | `project`, `date`, `attendees` |
 | `review` | `Reviews/` | `week` |
-<!-- /generated:kinds -->
+%%/generated:kinds%%
 
 ### Vocabularies
 
@@ -66,7 +66,7 @@ Typos are silent bugs — a misspelled status means work vanishes from the board
 property type in vanilla Obsidian, so **Triage → Invalid values** catches them instead. Check it
 weekly.
 
-<!-- generated:vocabularies -->
+%%generated:vocabularies%%
 | | |
 |---|---|
 | **Ticket status** | `backlog` · `todo` · `doing` · `blocked` · `review` · `done` · `cancelled` |
@@ -77,7 +77,7 @@ weekly.
 | **Issue type** | `feature` · `bug` · `chore` · `spike` · `research` |
 | **Recurrence** | `daily` · `weekdays` · `weekly` · `monthly` |
 | **Priority** | `1` (highest) … `4` — a number, so it sorts correctly |
-<!-- /generated:vocabularies -->
+%%/generated:vocabularies%%
 
 These are generated from `.tooling/src/planner/domain/vocabularies.py`, the module the
 API validates against, so this table cannot promise a value the tooling would reject.

@@ -26,6 +26,11 @@ class TestTheDocsAreCurrent:
     def test_the_file_exists_where_the_generator_looks(self, name):
         assert (docsgen.REPO / name).is_file()
 
+    @pytest.mark.parametrize("name,template", docsgen.TEMPLATES.items())
+    def test_each_template_and_its_output_exist(self, name, template):
+        assert (docsgen.REPO / template).is_file()
+        assert (docsgen.REPO / name).is_file()
+
     def test_rendering_is_idempotent(self):
         """Otherwise --check would report drift immediately after --write."""
         for name in docsgen.FILES:
@@ -36,16 +41,19 @@ class TestTheDocsAreCurrent:
 class TestMarkers:
     def test_every_marker_in_the_docs_has_a_generator(self):
         """A typo'd marker would silently never be filled in."""
-        for name in docsgen.FILES:
+        sources = list(docsgen.FILES) + list(docsgen.TEMPLATES.values())
+        for name in sources:
             text = (docsgen.REPO / name).read_text()
             for found in re.findall(r"<!-- generated:([\w-]+) -->", text):
                 assert found in docsgen.SECTIONS, f"{name}: no generator for {found!r}"
 
     def test_every_generator_is_used_somewhere(self):
         """A generator nothing references is dead code pretending to be documentation."""
-        combined = "".join((docsgen.REPO / n).read_text() for n in docsgen.FILES)
+        sources = list(docsgen.FILES) + list(docsgen.TEMPLATES.values())
+        combined = "".join((docsgen.REPO / n).read_text() for n in sources)
         for name in docsgen.SECTIONS:
-            assert f"<!-- generated:{name} -->" in combined
+            assert (f"<!-- generated:{name} -->" in combined
+                    or f"%%generated:{name}%%" in combined), name
 
     def test_an_unknown_marker_is_an_error_not_a_silent_skip(self):
         with pytest.raises(KeyError):
@@ -103,18 +111,19 @@ class TestTheSectionsMatchTheCode:
 
 
 class TestWhatIsNotGenerated:
+    def test_most_of_the_prose_is_still_hand_written(self):
+        """Generating explanation would be worse than duplicating it."""
+        template = (docsgen.REPO / docsgen.TEMPLATES["README.md"]).read_text()
+        generated = sum(len(m.group()) for m in docsgen.MARKER.finditer(template))
+        assert generated < len(template) * 0.3
+
     def test_hand_written_counts_are_gone(self):
         """A test count in prose is a number someone has to maintain and nobody
         benefits from; it was wrong within a day of being written."""
         readme = (docsgen.REPO / "README.md").read_text()
         assert not re.search(r"\b\d{3} tests\b", readme)
 
-    def test_most_of_the_prose_is_still_hand_written(self):
-        """Generating explanation would be worse than duplicating it. Only the parts
-        that are a second copy of code are generated."""
-        readme = (docsgen.REPO / "README.md").read_text()
-        generated = sum(len(m.group()) for m in docsgen.MARKER.finditer(readme))
-        assert generated < len(readme) * 0.3
+
 
 
 class TestTheWriter:
@@ -123,23 +132,36 @@ class TestTheWriter:
 
     @pytest.fixture
     def fake_repo(self, tmp_path):
-        (tmp_path / "README.md").write_text(
-            "Kept.\n\n<!-- generated:endpoints -->\nout of date\n"
-            "<!-- /generated:endpoints -->\n\nAlso kept.\n")
+        """A miniature of the real layout: an in-place file with markers, and a
+        template whose output carries none."""
+        (tmp_path / "System.md").write_text(
+            "Kept.\n\n%%generated:vocabularies%%\nout of date\n"
+            "%%/generated:vocabularies%%\n\nAlso kept.\n")
+        template = tmp_path / docsgen.TEMPLATES["README.md"]
+        template.parent.mkdir(parents=True)
+        template.write_text(
+            "<!-- editor note -->\n\nIntro.\n\n<!-- generated:endpoints -->\n"
+            "<!-- /generated:endpoints -->\n\nOutro.\n")
         return tmp_path
 
-    def test_it_reports_stale_files(self, fake_repo):
-        assert docsgen.stale(fake_repo) == ["README.md"]
+    def test_it_reports_both_kinds_of_staleness(self, fake_repo):
+        assert set(docsgen.stale(fake_repo)) == {"System.md", "README.md"}
 
     def test_it_rewrites_them(self, fake_repo):
-        assert docsgen.write(fake_repo) == ["README.md"]
+        assert set(docsgen.write(fake_repo)) == {"System.md", "README.md"}
         assert docsgen.stale(fake_repo) == []
 
-    def test_the_surrounding_prose_is_untouched(self, fake_repo):
+    def test_prose_around_an_in_place_section_is_untouched(self, fake_repo):
         docsgen.write(fake_repo)
-        text = (fake_repo / "README.md").read_text()
+        text = (fake_repo / "System.md").read_text()
         assert text.startswith("Kept.") and text.rstrip().endswith("Also kept.")
         assert "out of date" not in text
+
+    def test_a_rendered_file_keeps_its_prose_and_loses_its_plumbing(self, fake_repo):
+        docsgen.write(fake_repo)
+        text = (fake_repo / "README.md").read_text()
+        assert text.startswith("Intro.") and text.rstrip().endswith("Outro.")
+        assert "generated:" not in text and "editor note" not in text
 
     def test_writing_twice_changes_nothing_the_second_time(self, fake_repo):
         docsgen.write(fake_repo)
@@ -155,3 +177,36 @@ class TestTheWriter:
         (tmp_path / "README.md").write_text("Just prose.\n")
         assert docsgen.write(tmp_path) == []
         assert (tmp_path / "README.md").read_text() == "Just prose.\n"
+
+
+class TestNothingLeaksIntoObsidian:
+    """Both docs sit inside the vault, so anything Obsidian does not recognise as a
+    comment is visible in Live Preview. That is how `<!-- generated:layers -->` ended up
+    on screen in the manual."""
+
+    def test_the_readme_carries_no_markers_at_all(self):
+        """It is rendered whole from a template, so the reader never sees plumbing."""
+        text = (docsgen.REPO / "README.md").read_text()
+        assert "generated:" not in text
+
+    def test_the_template_header_does_not_reach_the_output(self):
+        """The template opens with a note to whoever edits it; that is about the
+        template, not part of the document."""
+        template = (docsgen.REPO / docsgen.TEMPLATES["README.md"]).read_text()
+        assert template.lstrip().startswith("<!--")
+        assert not (docsgen.REPO / "README.md").read_text().lstrip().startswith("<!--")
+
+    def test_system_md_uses_obsidian_comment_syntax(self):
+        """`%%` is Obsidian's comment token -- confirmed in its own markdown token
+        table. HTML comments are not, and show as literal text."""
+        text = (docsgen.REPO / "System.md").read_text()
+        assert "%%generated:" in text
+        assert "<!-- generated:" not in text
+
+    def test_no_html_comments_anywhere_in_the_vault_docs(self):
+        for name in ("README.md", "System.md"):
+            assert "<!--" not in (docsgen.REPO / name).read_text(), name
+
+    def test_the_template_lives_outside_the_vault(self):
+        """Dot-prefixed, so Obsidian never indexes the file that does carry markers."""
+        assert str(docsgen.TEMPLATES["README.md"]).startswith(".tooling")
