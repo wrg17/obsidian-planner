@@ -99,3 +99,35 @@ class TestTheHelper:
     def test_the_title_is_used(self):
         body = swagger_ui(openapi_url="/openapi.json", title="Distinctive").body.decode()
         assert "Distinctive" in body
+
+
+class TestSwaggerGreysAreOverridden:
+    """Swagger paints several panels with translucent black -- rgba(0,0,0,.1) and the
+    like. Over a light page that is a faint tint; over Dracula each one composites into
+    a grey slab. They cannot be fixed by darkening the page, only by naming each
+    offender, so this pins the ones that were actually wrong on screen."""
+
+    @pytest.mark.parametrize("selector", [
+        ".model-box",                       # the slab behind every schema name
+        ".json-schema-2020-12",             # Swagger 5's second schema renderer
+        ".model-hint",
+        "section.models .model-container",
+    ])
+    def test_the_offender_is_overridden(self, selector):
+        assert selector in DRACULA_CSS
+
+    def test_no_translucent_black_survives_in_our_sheet(self):
+        """Using rgba(0,0,0,...) in a rule would recreate the same problem.
+
+        Comments are stripped first: this file documents the offending values in prose,
+        and a check that could not tell an explanation from a declaration would forbid
+        writing down what went wrong.
+        """
+        rules = re.sub(r"/\*.*?\*/", "", DRACULA_CSS, flags=re.S)
+        assert "rgba(0, 0, 0" not in rules
+        assert "rgba(0,0,0" not in rules
+
+    def test_overlays_use_the_palette_not_transparency_over_black(self):
+        """Translucent Dracula grey over the Dracula background stays Dracula;
+        translucent black over it does not."""
+        assert "rgba(68, 71, 90" in DRACULA_CSS

@@ -162,10 +162,44 @@ body, .swagger-ui {{ background: {BACKGROUND}; color: {FOREGROUND}; }}
 .swagger-ui .btn.authorize {{ border-color: {GREEN}; color: {GREEN}; }}
 .swagger-ui .btn.authorize svg {{ fill: {GREEN}; }}
 
-/* Models */
+/* Models.
+
+   Swagger paints these with translucent black -- `.model-box` is rgba(0,0,0,.1),
+   `.json-schema-2020-12` is rgba(0,0,0,.05). Over a light page that is a faint tint;
+   over Dracula it composites into the grey slab that sits behind every schema name.
+   Each one needs an explicit colour, not a lighter black. */
 .swagger-ui section.models {{ border-color: {CURRENT_LINE}; }}
 .swagger-ui section.models h4 {{ color: {PURPLE}; }}
 .swagger-ui section.models .model-container {{ background: rgba(68, 71, 90, .35); }}
+.swagger-ui section.models .model-container:hover {{ background: rgba(68, 71, 90, .55); }}
+.swagger-ui section.models h4:hover {{ background: rgba(68, 71, 90, .35); }}
+.swagger-ui .model-box {{ background: transparent; }}
+.swagger-ui .model-hint {{ background: {CURRENT_LINE}; color: {FOREGROUND}; }}
+
+/* Swagger 5 renders bodies through a second schema component with its own greys. */
+.swagger-ui .json-schema-2020-12,
+.swagger-ui .json-schema-2020-12 button {{
+  background: transparent;
+  color: {FOREGROUND};
+}}
+.swagger-ui .json-schema-2020-12-keyword__name,
+.swagger-ui .json-schema-2020-12__title {{ color: {PURPLE}; }}
+.swagger-ui .json-schema-2020-12-property .json-schema-2020-12-keyword__name {{
+  color: {FOREGROUND};
+}}
+.swagger-ui .json-schema-2020-12__constraint {{
+  background: {CURRENT_LINE};
+  color: {YELLOW};
+}}
+.swagger-ui .json-schema-2020-12__constraint--string {{
+  background: {CURRENT_LINE};
+  color: {YELLOW};
+}}
+.swagger-ui .json-schema-2020-12__attribute {{ color: {COMMENT}; }}
+.swagger-ui .json-schema-2020-12-accordion,
+.swagger-ui .json-schema-2020-12-expand-deep-button {{ background: transparent; }}
+.swagger-ui .json-schema-2020-12-accordion__icon svg,
+.swagger-ui .json-schema-2020-12__icon svg {{ fill: {FOREGROUND}; }}
 .swagger-ui .model-title, .swagger-ui .model {{ color: {FOREGROUND}; }}
 .swagger-ui .model-toggle::after {{ filter: invert(1); }}
 .swagger-ui .prop-type {{ color: {CYAN}; }}
