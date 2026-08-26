@@ -210,3 +210,37 @@ class TestNothingLeaksIntoObsidian:
     def test_the_template_lives_outside_the_vault(self):
         """Dot-prefixed, so Obsidian never indexes the file that does carry markers."""
         assert str(docsgen.TEMPLATES["README.md"]).startswith(".tooling")
+
+
+class TestGeneratedMarkdownActuallyRenders:
+    """A generated block is markdown, and markdown is whitespace-sensitive. A table
+    written directly beneath its marker is folded into the preceding paragraph and
+    renders as literal pipes -- which is exactly what happened in System.md."""
+
+    def test_a_kept_marker_is_separated_from_its_content_by_a_blank_line(self):
+        rendered = docsgen.render(
+            "Prose.\n\n%%generated:kinds%%\n%%/generated:kinds%%\n")
+        lines = rendered.splitlines()
+        opening = lines.index("%%generated:kinds%%")
+        assert lines[opening + 1] == "", "no blank line after the opening marker"
+        closing = lines.index("%%/generated:kinds%%")
+        assert lines[closing - 1] == "", "no blank line before the closing marker"
+
+    @pytest.mark.parametrize("name", ["kinds", "vocabularies", "endpoints"])
+    def test_every_table_section_starts_a_block(self, name):
+        """Each of these renders a table, so each needs the separation."""
+        assert docsgen.SECTIONS[name]().startswith("|")
+
+    def test_the_tables_in_the_docs_have_a_blank_line_above_them(self):
+        """The property as it exists on disk, not merely in the renderer."""
+        for filename in ("System.md", "README.md"):
+            lines = (docsgen.REPO / filename).read_text().splitlines()
+            for index, line in enumerate(lines):
+                if line.startswith("|") and index and not lines[index - 1].startswith("|"):
+                    assert lines[index - 1].strip() == "", (
+                        f"{filename}:{index + 1} table has no blank line above it")
+
+    def test_rendering_stays_idempotent_with_the_padding(self):
+        """The padding must not accumulate on repeated writes."""
+        once = docsgen.render("%%generated:kinds%%\n%%/generated:kinds%%\n")
+        assert docsgen.render(once) == once

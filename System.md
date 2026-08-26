@@ -46,6 +46,7 @@ Every note carries `kind`. That field is what makes types real to Bases — filt
 off it.
 
 %%generated:kinds%%
+
 | Kind | Folder | Own fields |
 |---|---|---|
 | `area` | `Items/` | `status` |
@@ -58,6 +59,7 @@ off it.
 | `decision` | `Docs/` | `status`, `project`, `date`, `supersedes` |
 | `meeting` | `Meetings/` | `project`, `date`, `attendees` |
 | `review` | `Reviews/` | `week` |
+
 %%/generated:kinds%%
 
 ### Vocabularies
@@ -67,6 +69,7 @@ property type in vanilla Obsidian, so **Triage → Invalid values** catches them
 weekly.
 
 %%generated:vocabularies%%
+
 | | |
 |---|---|
 | **Ticket status** | `backlog` · `todo` · `doing` · `blocked` · `review` · `done` · `cancelled` |
@@ -77,6 +80,7 @@ weekly.
 | **Issue type** | `feature` · `bug` · `chore` · `spike` · `research` |
 | **Recurrence** | `daily` · `weekdays` · `weekly` · `monthly` |
 | **Priority** | `1` (highest) … `4` — a number, so it sorts correctly |
+
 %%/generated:vocabularies%%
 
 These are generated from `.tooling/src/planner/domain/vocabularies.py`, the module the

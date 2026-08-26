@@ -164,9 +164,13 @@ def render(text: str, *, keep_markers: bool = True) -> str:
         if not keep_markers:
             return SECTIONS[name]()
         opening, closing = STYLES[style]
-        return (opening.format(name=name) + "\n"
+        # Blank lines on both sides, not just newlines. A markdown table has to be
+        # preceded by one or the parser folds it into the previous paragraph and
+        # renders it as literal pipes -- which is what happened when the marker sat
+        # directly above the table in System.md.
+        return (opening.format(name=name) + "\n\n"
                 + SECTIONS[name]()
-                + "\n" + closing.format(name=name))
+                + "\n\n" + closing.format(name=name))
 
     return MARKER.sub(substitute, text)
 
