@@ -325,3 +325,71 @@ class TestBulkCreate:
                 Note(kind="epic", title="New epic"),
             ])
         assert not populated.exists("Child")
+
+
+class TestRollbackPreservesConcurrentEdits:
+    """A rollback that clobbers the user's edit to tidy up after a transaction they
+    never knew about is worse than an incomplete rollback."""
+
+    def test_the_edit_survives_and_the_rest_is_still_undone(self, tmp_path):
+        (tmp_path / "a.md").write_text("A original")
+        (tmp_path / "b.md").write_text("B original")
+        with pytest.raises(Boom):
+            with UnitOfWork() as uow:
+                uow.execute(WriteFile(tmp_path / "a.md", "A ours"))
+                uow.execute(WriteFile(tmp_path / "b.md", "B ours"))
+                (tmp_path / "b.md").write_text("B edited in obsidian")
+                raise Boom()
+        assert (tmp_path / "a.md").read_text() == "A original"
+        assert (tmp_path / "b.md").read_text() == "B edited in obsidian"
+
+    def test_conflicts_are_recorded_on_the_unit_of_work(self, tmp_path):
+        uow = UnitOfWork()
+        with pytest.raises(Boom):
+            with uow:
+                uow.execute(WriteFile(tmp_path / "a.md", "ours"))
+                (tmp_path / "a.md").write_text("theirs")
+                raise Boom()
+        assert [c.path.name for c in uow.conflicts] == ["a.md"]
+
+    def test_a_conflict_does_not_replace_the_original_exception(self, tmp_path):
+        """The caller needs to know why the transaction failed. A rollback that
+        deliberately preserved someone's edit is not the reason."""
+        with pytest.raises(Boom):
+            with UnitOfWork() as uow:
+                uow.execute(WriteFile(tmp_path / "a.md", "ours"))
+                (tmp_path / "a.md").write_text("theirs")
+                raise Boom()
+
+    def test_a_conflict_is_logged_loudly(self, tmp_path, caplog):
+        import logging
+        with caplog.at_level(logging.WARNING, logger="planner.repository"):
+            with pytest.raises(Boom):
+                with UnitOfWork() as uow:
+                    uow.execute(WriteFile(tmp_path / "a.md", "ours"))
+                    (tmp_path / "a.md").write_text("theirs")
+                    raise Boom()
+        assert "modified by something else" in caplog.text
+
+    def test_a_conflict_is_not_counted_as_a_rollback_failure(self, tmp_path):
+        """Nothing went wrong -- the command declined to act, which is correct."""
+        uow = UnitOfWork()
+        with pytest.raises(Boom):
+            with uow:
+                uow.execute(WriteFile(tmp_path / "a.md", "ours"))
+                (tmp_path / "a.md").write_text("theirs")
+                raise Boom()
+        # RollbackError would have replaced Boom; it did not.
+
+    def test_conflicts_reset_between_transactions(self, tmp_path):
+        uow = UnitOfWork()
+        with pytest.raises(Boom):
+            with uow:
+                uow.execute(WriteFile(tmp_path / "a.md", "ours"))
+                (tmp_path / "a.md").write_text("theirs")
+                raise Boom()
+        with pytest.raises(Boom):
+            with uow:
+                uow.execute(WriteFile(tmp_path / "b.md", "ours"))
+                raise Boom()
+        assert uow.conflicts == []

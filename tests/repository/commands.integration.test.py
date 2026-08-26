@@ -276,3 +276,79 @@ class TestPrepareApplySplit:
         command = CreateDirectory(tmp_path / "new")
         command.prepare()
         assert command.journal_entry(tmp_path) is None
+
+
+class TestUndoRefusesToClobber:
+    """Undo restores the prior state only while the file still holds what we wrote.
+
+    The same rule crash recovery applies, and the reason it matters more here: a crash
+    is rare, but a rollback happens whenever a request fails, and Obsidian writes
+    continuously. This was the more dangerous of the two paths and was missing the
+    check entirely.
+    """
+
+    def test_a_concurrently_edited_file_is_not_restored(self, target):
+        from planner.repository.commands import ConcurrentModification
+
+        target.write_text("original")
+        command = WriteFile(target, "ours")
+        command.execute()
+        target.write_text("edited in obsidian")
+
+        with pytest.raises(ConcurrentModification):
+            command.undo()
+        assert target.read_text() == "edited in obsidian"
+
+    def test_the_error_names_the_file_and_says_what_was_left(self, target):
+        from planner.repository.commands import ConcurrentModification
+
+        target.write_text("original")
+        command = WriteFile(target, "ours")
+        command.execute()
+        target.write_text("theirs")
+        with pytest.raises(ConcurrentModification) as caught:
+            command.undo()
+        assert target.name in str(caught.value)
+        assert "left in place" in str(caught.value)
+        assert caught.value.path == target
+
+    def test_an_untouched_file_is_still_restored(self, target):
+        target.write_text("original")
+        command = WriteFile(target, "ours")
+        command.execute()
+        command.undo()
+        assert target.read_text() == "original"
+
+    def test_a_recreated_file_is_not_deleted_again(self, target):
+        """We deleted it; the user made a new note with the same name. Undoing our
+        delete would restore our content over theirs."""
+        from planner.repository.commands import ConcurrentModification
+
+        target.write_text("ours")
+        command = DeleteFile(target)
+        command.execute()
+        target.write_text("a new note the user just made")
+
+        with pytest.raises(ConcurrentModification):
+            command.undo()
+        assert target.read_text() == "a new note the user just made"
+
+    def test_an_undone_delete_still_works_when_nothing_intervened(self, target):
+        target.write_text("precious")
+        command = DeleteFile(target)
+        command.execute()
+        command.undo()
+        assert target.read_text() == "precious"
+
+    def test_a_created_file_edited_before_rollback_is_kept(self, target):
+        """We created it, the user typed into it, then our transaction failed.
+        Deleting it would throw away work they can see on screen."""
+        from planner.repository.commands import ConcurrentModification
+
+        command = WriteFile(target, "our skeleton")
+        command.execute()
+        target.write_text("our skeleton plus their notes")
+
+        with pytest.raises(ConcurrentModification):
+            command.undo()
+        assert target.exists()

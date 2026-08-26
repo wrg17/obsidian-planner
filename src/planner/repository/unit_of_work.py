@@ -17,6 +17,13 @@ Two limits, stated rather than hidden:
                  back. Nothing short of a lock file would change that, and locking a
                  vault the user is editing is worse than the flicker.
 
+                 A consequence worth stating: because writes are visible, they can be
+                 edited before the rollback reaches them. Undo therefore checks that a
+                 file still holds what we wrote before restoring it, and leaves it
+                 alone otherwise -- the same rule crash recovery applies. A rollback
+                 that destroyed someone's edit to tidy up after a transaction they
+                 never knew about would be worse than an incomplete rollback.
+
   DURABLE, WITH A JOURNAL
                  Given one, intent is flushed to disk before each change lands, so a
                  crash mid-transaction is undone on the next startup -- see
@@ -29,7 +36,7 @@ from __future__ import annotations
 
 import logging
 
-from .commands import Command, CommandError
+from .commands import Command, CommandError, ConcurrentModification
 from .journal import Journal  # noqa: F401 - type only
 
 log = logging.getLogger("planner.repository")
@@ -59,6 +66,7 @@ class UnitOfWork:
         self._depth = 0
         self._failed = False
         self._journal = journal
+        self.conflicts: list = []
         self._summary = summary
         self._actor = actor
         self._request_id = request_id
@@ -143,9 +151,18 @@ class UnitOfWork:
         the vault further from where it started than finishing does.
         """
         failures: list[tuple[Command, BaseException]] = []
+        self.conflicts = []
         for command in reversed(self._done):
             try:
                 command.undo()
+            except ConcurrentModification as exc:
+                # Not a failure: the command declined to act, which is the correct
+                # outcome. Logged loudly and kept on the unit of work, but it does not
+                # replace the original exception -- the caller needs to see why the
+                # transaction failed, and a rollback that deliberately preserved
+                # someone's edit is not the reason.
+                self.conflicts.append(exc)
+                log.warning("%s", exc)
             except Exception as exc:               # noqa: BLE001 - collected, not hidden
                 failures.append((command, exc))
                 log.error("rollback failed for %s: %s", command.describe(), exc)

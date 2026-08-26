@@ -31,6 +31,23 @@ class CommandError(RuntimeError):
     """A command failed to execute or to undo."""
 
 
+class ConcurrentModification(CommandError):
+    """Undo declined: the file no longer holds what this command wrote.
+
+    Distinct from a failure, because nothing went wrong -- the command chose not to
+    act. Something else changed the file between our write and our rollback, and on
+    this vault the only candidate is a person editing their own notes in Obsidian.
+    Restoring would silently destroy that edit to tidy up after a transaction they
+    never knew about.
+    """
+
+    def __init__(self, path, describe):
+        self.path = path
+        super().__init__(
+            f"{describe}: not undone -- {path.name} was modified by something else "
+            f"since we wrote it, and its current content was left in place")
+
+
 @runtime_checkable
 class Command(Protocol):
     """One reversible filesystem mutation.
@@ -112,9 +129,26 @@ class _Base:
         elif self.path.exists():
             self.path.unlink()
 
+    def _current_hash(self) -> str | None:
+        from .journal import digest
+        return digest(self.path.read_bytes() if self.path.is_file() else None)
+
     def undo(self) -> None:
+        """Restore the prior state -- unless someone else has since changed the file.
+
+        The same rule crash recovery applies, and for the same reason: a file that no
+        longer holds what we wrote holds something we cannot account for, and on this
+        vault that means a person edited it. Their edit is newer than the transaction
+        we are abandoning and worth more than it.
+
+        Without this check the in-process path was the *more* dangerous of the two --
+        a crash is rare, but a rollback happens whenever a request fails, and Obsidian
+        writes continuously.
+        """
         if not self._executed:
             return                      # never ran; nothing to reverse
+        if self._current_hash() != self._intended_hash():
+            raise ConcurrentModification(self.path, self.describe())
         self._restore()
         self._executed = False
 
