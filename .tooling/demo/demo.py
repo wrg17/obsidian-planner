@@ -446,6 +446,13 @@ def load():
     print("  icons but the file explorer has not drawn them yet -- notes will show up")
     print("  with no icon until a reload. Nothing is wrong.")
     print()
+    print("  If Obsidian Sync is enabled, close Obsidian before load/clear cycles.")
+    print("  Sync treats a rapid delete-then-recreate as a conflict and restores the")
+    print("  deleted file alongside the new one, so the vault fills up with 'Note 2',")
+    print("  'Note 3' copies. `clear` will still remove them -- it matches on the")
+    print("  demo: true marker rather than on filenames -- but they should not be")
+    print("  created in the first place.")
+    print()
     print("  Remove them again with: python3 demo/demo.py clear")
 
 
