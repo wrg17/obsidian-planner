@@ -19,7 +19,15 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-VAULT = Path(__file__).resolve().parent.parent
+#: The vault is the repository root; this script lives two levels down in
+#: tooling/demo/. Written as parents[2] with the layout spelled out because a chain of
+#: `.parent.parent` silently pointed at the wrong directory the moment the code moved
+#: into tooling/, and nothing failed until notes appeared in the wrong place.
+#:
+#:     <repo root>/          the Obsidian vault
+#:       tooling/            everything that is not notes
+#:         demo/demo.py      here
+VAULT = Path(__file__).resolve().parents[2]
 TODAY = date.today()
 
 
