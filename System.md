@@ -45,18 +45,20 @@ Do these once, in order.
 Every note carries `kind`. That field is what makes types real to Bases — filters and views key
 off it.
 
-| kind | Is | Own fields | Status vocabulary |
-|---|---|---|---|
-| `area` | Ongoing life domain. Never finishes. | — | `active` `paused` `done` |
-| `project` | Outcome with an end. Belongs to an area. | `area` `priority` `due` `closed` | `active` `paused` `done` |
-| `epic` | A chunk of a project. | `type` `parent` `project` `priority` `due` `closed` `done` | ticket statuses |
-| `task` | A unit of work. | `type` `parent` `project` `priority` `due` `scheduled` `closed` `done` `blocked_by` | ticket statuses |
-| `subtask` | A step inside a task. | `type` `parent` `project` `priority` `due` `closed` `done` | ticket statuses |
-| `routine` | Recurring thing, where being late is information. | `area` `recur` `last_done` | `active` `paused` |
-| `doc` | Spec, design, runbook, reference. | `project` `area` | `draft` `current` `stale` |
-| `decision` | Decision record (ADR). | `project` `date` `supersedes` | `proposed` `accepted` `rejected` `superseded` |
-| `meeting` | Meeting notes. | `project` `date` `attendees` | — |
-| `review` | Weekly review. | `week` | — |
+<!-- generated:kinds -->
+| Kind | Folder | Own fields |
+|---|---|---|
+| `area` | `Items/` | `status` |
+| `project` | `Items/` | `status`, `area`, `priority`, `due`, `closed` |
+| `epic` | `Items/` | `status`, `done`, `type`, `parent`, `project`, `priority`, `due`, `closed` |
+| `task` | `Items/` | `status`, `done`, `type`, `parent`, `project`, `priority`, `due`, `scheduled`, `closed`, `blocked_by` |
+| `subtask` | `Items/` | `status`, `done`, `type`, `parent`, `project`, `priority`, `due`, `closed` |
+| `routine` | `Items/` | `status`, `area`, `recur`, `last_done` |
+| `doc` | `Docs/` | `status`, `project`, `area` |
+| `decision` | `Docs/` | `status`, `project`, `date`, `supersedes` |
+| `meeting` | `Meetings/` | `project`, `date`, `attendees` |
+| `review` | `Reviews/` | `week` |
+<!-- /generated:kinds -->
 
 ### Vocabularies
 
@@ -64,14 +66,21 @@ Typos are silent bugs — a misspelled status means work vanishes from the board
 property type in vanilla Obsidian, so **Triage → Invalid values** catches them instead. Check it
 weekly.
 
-- **Ticket status**: `backlog` → `todo` → `doing` → `blocked` → `review` → `done`, plus `cancelled`
-- **done**: a checkbox, equivalent to `status: done` — a one-click alternative, not a replacement
-- **Issue type**: `feature` `bug` `chore` `spike` `research`
-- **priority**: `1` (highest) to `4`. A number, so it sorts properly
-- **recur**: `daily` `weekdays` `weekly` `monthly`
+<!-- generated:vocabularies -->
+| | |
+|---|---|
+| **Ticket status** | `backlog` · `todo` · `doing` · `blocked` · `review` · `done` · `cancelled` |
+| **Container status** | `active` · `paused` · `done` |
+| **Routine status** | `active` · `paused` |
+| **Doc status** | `draft` · `current` · `stale` |
+| **Decision status** | `proposed` · `accepted` · `rejected` · `superseded` |
+| **Issue type** | `feature` · `bug` · `chore` · `spike` · `research` |
+| **Recurrence** | `daily` · `weekdays` · `weekly` · `monthly` |
+| **Priority** | `1` (highest) … `4` — a number, so it sorts correctly |
+<!-- /generated:vocabularies -->
 
-After a value has been used once, Obsidian's property editor autocompletes it — that's the
-closest thing to a dropdown here.
+These are generated from `.tooling/src/planner/domain/vocabularies.py`, the module the
+API validates against, so this table cannot promise a value the tooling would reject.
 
 ## Hierarchy
 

@@ -82,20 +82,23 @@ open, and so the vault can check itself, which markdown alone cannot.
 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp,postgres]"
-.venv/bin/pytest                                    # 664 tests, 99% coverage
+.venv/bin/pytest                                    # the suite; fails under 98% coverage
 .venv/bin/uvicorn planner.api:app --reload          # http://127.0.0.1:8000/docs
 .venv/bin/python -m planner.mcp                     # MCP server over stdio
 ```
 
 ### Layers
 
+<!-- generated:layers -->
 ```
-domain/      entities, vocabularies, validation   — no IO, no framework
-repository/  persistence port + markdown adapter
-service/     business rules, transport-agnostic
-api/         FastAPI: middleware, controllers, DTOs
+api/         FastAPI: routes, middleware, controllers, DTOs
+contracts/   wire shapes shared by every transport
+domain/      entities, vocabularies, validation — no IO, no framework
 mcp/         MCP tools over the same service
+repository/  persistence port, markdown adapter, reversible commands, unit of work, journals
+service/     business rules, transport-agnostic
 ```
+<!-- /generated:layers -->
 
 Each layer may only import downward, and `.tooling/tests/architecture.integration.test.py`
 enforces it by parsing the imports — including that the domain never imports FastAPI, pydantic or `pathlib`.
@@ -109,6 +112,21 @@ service.create(kind="task", title="Pick a type scale", parent="Design system")
 service.close("Pick a type scale")      # status, done and closed move together
 service.problems()                      # the Triage base, as a function call
 ```
+
+### Generated documentation
+
+The endpoint table above, the layer diagram, and the vocabulary and note-type tables in
+`System.md` are **generated from the code** and delimited by `<!-- generated:… -->`
+markers. Everything around them is hand-written, which is the part worth writing.
+
+```sh
+.venv/bin/python -m planner.docsgen --check   # fails if stale
+.venv/bin/python -m planner.docsgen --write   # regenerate
+```
+
+A test runs `--check`, so prose that has fallen behind the code fails the suite rather
+than being believed by a reader. This was not hypothetical: when it was added the README
+listed seven endpoints against twelve in the routing table.
 
 ### Tests and coverage
 
@@ -138,6 +156,7 @@ cd .tooling
 .venv/bin/pytest --no-cov -q           # quick loop
 open htmlcov/index.html                # line-by-line report
 .venv/bin/pdoc planner -o docs/api     # API reference from docstrings
+.venv/bin/python -m planner.docsgen --write   # refresh generated doc sections
 ```
 
 Coverage is branch-level and gated at 98% in `addopts`, so a drop fails the run rather
@@ -148,9 +167,22 @@ starting a real stdio server; the dispatch it calls is tested directly.
 
 Swagger UI at `/docs`, OpenAPI at `/openapi.json`.
 
+<!-- generated:endpoints -->
 | | |
 |---|---|
-| `GET /notes` | filter by `kind`, `project`, `parent`, `status`, `open` |
+| `GET /notes` | List notes |
+| `POST /notes` | Create a note |
+| `POST /notes/bulk` | Create several notes as one transaction |
+| `GET /notes/{title}` | Fetch one note |
+| `PATCH /notes/{title}` | Update a note |
+| `DELETE /notes/{title}` | Delete a note |
+| `GET /notes/{title}/children` | Direct children |
+| `POST /notes/{title}/close` | Close a ticket |
+| `POST /notes/{title}/reopen` | Reopen a ticket |
+| `GET /schema` | Kinds, fields, vocabularies |
+| `GET /problems` | Notes that fail to validate |
+| `GET /health` | Liveness and vault reachability |
+<!-- /generated:endpoints -->
 | `POST /notes` | folder derived from `kind`; defaults applied |
 | `POST /notes/bulk` | a batch as one transaction — all of them or none |
 | `GET·PATCH·DELETE /notes/{title}` | `null` in a PATCH removes the field |
