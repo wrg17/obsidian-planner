@@ -19,6 +19,7 @@ import os
 from datetime import date
 from pathlib import Path
 
+from ..contracts.note import note_properties
 from ..domain import schema as S
 from ..domain.errors import PlannerError
 from ..domain.note import Note
@@ -32,6 +33,20 @@ def build_service(root=None) -> NoteService:
 
 
 # --- tool schemas -------------------------------------------------------------------
+#
+# Derived from the API's NoteIn model rather than written out again. The same eighteen
+# fields used to be listed here in JSON Schema, in api/schemas.py as pydantic fields,
+# and in domain/fields.py -- and the three had drifted: this file was missing
+# `attendees`, `closed`, `done` and `supersedes`, so a model could not set a meeting's
+# attendees or record one decision superseding another.
+#
+# Deriving matters more for MCP than for REST. A model reads the tool schema as the
+# specification; a field absent from it does not exist as far as the model is
+# concerned, and no amount of server-side support makes up for that.
+#
+# The shared definition lives in `contracts`, not in the API: a transport importing
+# another transport would mean removing REST breaks MCP.
+
 
 def _kind_prop(description="The note type."):
     return {"type": "string", "enum": list(S.KIND_NAMES), "description": description}
@@ -71,26 +86,7 @@ TOOLS = [
             "describe_schema first if unsure."),
         "inputSchema": {
             "type": "object",
-            "properties": {
-                "kind": _kind_prop(),
-                "title": {"type": "string", "description":
-                          "Unique across the whole vault; links resolve by name."},
-                "body": {"type": "string", "description": "Markdown body."},
-                "status": {"type": "string", "enum": list(S.ALL_STATUS)},
-                "type": {"type": "string", "enum": list(S.ISSUE_TYPE)},
-                "priority": {"type": "integer", "minimum": S.PRIORITY_RANGE[0],
-                             "maximum": S.PRIORITY_RANGE[1], "description": "1 is highest."},
-                "parent": {"type": "string"},
-                "project": {"type": "string"},
-                "area": {"type": "string"},
-                "due": {"type": "string", "format": "date"},
-                "scheduled": {"type": "string", "format": "date"},
-                "recur": {"type": "string", "enum": list(S.RECUR)},
-                "last_done": {"type": "string", "format": "date"},
-                "date": {"type": "string", "format": "date"},
-                "week": {"type": "string", "description": "ISO week, e.g. 2026-W35."},
-                "blocked_by": {"type": "array", "items": {"type": "string"}},
-            },
+            "properties": note_properties(),
             "required": ["kind", "title"],
         },
     },

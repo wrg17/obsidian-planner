@@ -18,8 +18,11 @@ ALLOWED = {
     "domain": set(),
     "repository": {"domain"},
     "service": {"domain", "repository"},
-    "api": {"domain", "repository", "service"},
-    "mcp": {"domain", "repository", "service"},
+    # Wire shapes both transports share. Above the domain, below the transports --
+    # which is what stops `mcp` importing `api` to reuse a request model.
+    "contracts": {"domain"},
+    "api": {"domain", "repository", "service", "contracts"},
+    "mcp": {"domain", "repository", "service", "contracts"},
 }
 
 

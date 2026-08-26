@@ -28,6 +28,13 @@ class TestToolSchemas:
         spec = next(t for t in TOOLS if t["name"] == tool)
         assert spec["inputSchema"]["properties"][field]["enum"] == expected
 
+    def test_create_note_offers_every_writable_field(self):
+        """It once offered sixteen of twenty -- no attendees, closed, done or
+        supersedes -- because the list was maintained by hand in three places."""
+        from planner.contracts import NoteIn
+        spec = next(t for t in TOOLS if t["name"] == "create_note")
+        assert set(spec["inputSchema"]["properties"]) == set(NoteIn.model_fields)
+
     def test_enums_are_generated_not_duplicated(self):
         """If someone adds a kind to the domain, the tool schema must follow without
         anyone remembering to edit it."""
