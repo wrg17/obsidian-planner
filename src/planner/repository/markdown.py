@@ -19,6 +19,15 @@ from ..domain import schema
 from ..domain.errors import NoteNotFound, ValidationError
 from ..domain.note import Note
 
+def _names_in(directory: Path) -> set[str]:
+    """Actual directory entries, so a case-insensitive filesystem cannot pass off the
+    caller's spelling as the stored one."""
+    try:
+        return {p.name for p in directory.iterdir()}
+    except OSError:
+        return set()
+
+
 #: Every folder that may hold notes. Journal/ is included because daily notes are
 #: real notes even though nothing in the API creates them.
 CONTENT_FOLDERS = ("Items", "Docs", "Meetings", "Reviews", "Journal")
@@ -40,10 +49,37 @@ class MarkdownNoteRepository:
         looking a note up usually does not know its kind yet -- and because titles are
         unique vault-wide, so at most one can match.
         """
+        folded = title.casefold()
         for folder in CONTENT_FOLDERS:
             candidate = self.root / folder / f"{title}.md"
             if candidate.is_file():
-                return candidate
+                # The probe succeeded, but on a case-insensitive volume it may have
+                # matched a differently-cased file -- and Path.stem echoes the string
+                # we built, not the directory entry. Returning it would make
+                # GET /notes/PICK%20A%20TYPE%20SCALE answer with title "PICK A TYPE
+                # SCALE", a title no note actually has and one that would 409 as a
+                # case clash if fed back. Canonicalise against the real entry.
+                if candidate.name in _names_in(candidate.parent):
+                    return candidate
+                return next((p for p in sorted(candidate.parent.glob("*.md"))
+                             if p.stem.casefold() == folded), candidate)
+        # Nothing at the exact path. On a case-sensitive filesystem that is the only
+        # probe that could have matched, so scan before giving up -- otherwise the same
+        # request 200s on macOS and 404s on Linux, with the disk deciding rather than
+        # the application.
+        return self._scan_for(folded)
+
+    def _scan_for(self, folded: str) -> Path | None:
+        """Locate a note by casefolded title, ignoring the exact-path fast path.
+
+        Split out because it is the branch that only runs on a case-sensitive
+        filesystem: on macOS the probe above always matches first, so this would be
+        dead code in the test run on a developer machine and live code in production
+        on Linux. Testing it directly covers it on either.
+        """
+        for path in self._paths():
+            if path.stem.casefold() == folded:
+                return path
         return None
 
     def exists(self, title: str) -> bool:
@@ -64,7 +100,9 @@ class MarkdownNoteRepository:
         path = self.find(title)
         if path is None:
             raise NoteNotFound(f"no note titled {title!r}")
-        return Note.from_markdown(path.read_text(encoding="utf-8"), title)
+        # path.stem, not `title`: the note is identified by what is stored, not by how
+        # the caller spelled it.
+        return Note.from_markdown(path.read_text(encoding="utf-8"), path.stem)
 
     def iter_all(self) -> Iterable[Note]:
         """Readable notes only.

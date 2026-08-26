@@ -17,7 +17,8 @@ nor the MCP SDK.
 """
 
 from .domain import (
-    KINDS, TICKET_KINDS, Note, NoteExists, NoteNotFound, PlannerError, ValidationError,
+    KINDS, TICKET_KINDS, ChildrenExist, Note, NoteExists, NoteNotFound, PlannerError,
+    ValidationError,
 )
 from .repository.markdown import MarkdownNoteRepository
 from .service.notes import NoteService
@@ -31,5 +32,5 @@ def open_vault(root) -> NoteService:
 __all__ = [
     "open_vault", "NoteService", "MarkdownNoteRepository", "Note",
     "KINDS", "TICKET_KINDS",
-    "PlannerError", "ValidationError", "NoteNotFound", "NoteExists",
+    "PlannerError", "ValidationError", "NoteNotFound", "NoteExists", "ChildrenExist",
 ]

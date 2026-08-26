@@ -81,7 +81,7 @@ open, and so the vault can check itself, which markdown alone cannot.
 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp]"
-.venv/bin/pytest                                    # 338 tests, 99% coverage
+.venv/bin/pytest                                    # 476 tests, 99% coverage
 .venv/bin/uvicorn planner.api:app --reload          # http://127.0.0.1:8000/docs
 .venv/bin/python -m planner.mcp                     # MCP server over stdio
 ```
@@ -124,11 +124,18 @@ works. `architecture.integration.test.py` is the one file not named for a module
 checks the layering, and also that every module *has* a test file, so a new one cannot
 slip in untested.
 
+Endpoint behaviour is specified as numbered **invariants** in the route docstrings, and
+the system-wide ones (S1-S9) in `api/app.py` — which are also published in the OpenAPI
+description, so a client author never has to read the source. Tests name the invariant
+they prove (`test_D2_deleting_a_parent_is_refused`), so a failure points at a stated
+rule rather than a bare assertion.
+
 ```sh
 .venv/bin/pytest                       # runs with coverage; fails under 98%
 .venv/bin/pytest tests/domain          # one layer
 .venv/bin/pytest --no-cov -q           # quick loop
 open htmlcov/index.html                # line-by-line report
+.venv/bin/pdoc planner -o docs/api     # API reference from docstrings
 ```
 
 Coverage is branch-level and gated at 98% in `addopts`, so a drop fails the run rather

@@ -60,6 +60,37 @@ class TestFind:
         insensitive = (tmp_path / "caseprobe").exists()
         assert repo.exists("t") is insensitive
 
+    def test_find_falls_back_to_a_case_insensitive_scan(self, repo):
+        """So lookup does not depend on the filesystem. On a case-sensitive volume the
+        exact-path probe misses and this fallback is what answers; on macOS the probe
+        already matched. Either way the application decides, not the disk."""
+        repo.save(Note(kind="task", title="MixedCase Title"))
+        assert repo.find("mixedcase title") is not None
+
+    def test_find_returns_the_stored_spelling_not_the_requested_one(self, repo):
+        """On a case-insensitive volume the exact-path probe matches a differently
+        cased file, and Path.stem would echo the caller's spelling -- yielding a title
+        no note has, which would then 409 as a case clash if fed back."""
+        repo.save(Note(kind="task", title="MixedCase Title"))
+        for spelling in ("mixedcase title", "MIXEDCASE TITLE", "MixedCase Title"):
+            assert repo.find(spelling).stem == "MixedCase Title"
+
+    def test_get_returns_the_canonical_title(self, repo):
+        repo.save(Note(kind="task", title="MixedCase Title"))
+        assert repo.get("MIXEDCASE TITLE").title == "MixedCase Title"
+
+    def test_scan_finds_by_case_regardless_of_filesystem(self, repo):
+        """The branch that only executes on a case-sensitive volume. macOS matches on
+        the exact-path probe first, so exercising it directly is the only way to cover
+        it on a developer machine as well as in production."""
+        repo.save(Note(kind="task", title="MixedCase Title"))
+        assert repo._scan_for("mixedcase title").stem == "MixedCase Title"
+        assert repo._scan_for("nothing here") is None
+
+    def test_find_still_returns_none_for_a_genuine_miss(self, repo):
+        repo.save(Note(kind="task", title="Present"))
+        assert repo.find("Absent") is None
+
     def test_titles_lists_without_parsing(self, repo):
         repo.save(Note(kind="task", title="One"))
         (repo.root / "Items" / "Unparseable.md").write_text("no frontmatter")
@@ -129,6 +160,11 @@ class TestDelete:
 
 
 class TestRootHandling:
+    def test_names_in_tolerates_a_missing_directory(self, tmp_path):
+        """find() probes folders that a fresh clone may not have yet."""
+        from planner.repository.markdown import _names_in
+        assert _names_in(tmp_path / "absent") == set()
+
     def test_accepts_a_string_path(self, tmp_path):
         assert MarkdownNoteRepository(str(tmp_path)).root == tmp_path
 

@@ -73,7 +73,9 @@ class TestRead:
             vault.get("Nope")
 
     def test_list_by_kind(self, populated):
-        assert [n.title for n in populated.list(kind="epic")] == ["Design system"]
+        titles = {n.title for n in populated.list(kind="epic")}
+        assert titles == {"Design system", "Content migration"}
+        assert all(n.kind == "epic" for n in populated.list(kind="epic"))
 
     def test_list_by_field(self, populated):
         titles = [n.title for n in populated.list(project="Website relaunch")]
@@ -218,11 +220,14 @@ class TestReopen:
 class TestDescendants:
     def test_walks_the_whole_subtree(self, populated):
         found = {n.title for n in populated.descendants_of("Website relaunch")}
-        assert found == {"Design system", "Pick a type scale", "Test at 320px"}
+        assert {"Design system", "Pick a type scale", "Test at 320px"} <= found
+        assert "Website relaunch" not in found
+        assert "Studio" not in found          # upward, not downward
 
     def test_direct_children_are_one_level_only(self, populated):
         found = {n.title for n in populated.children_of("Website relaunch")}
-        assert found == {"Design system"}
+        assert found == {"Design system", "Content migration"}
+        assert "Pick a type scale" not in found        # a grandchild
 
     def test_a_hand_edited_cycle_does_not_hang(self, populated):
         """Nothing in Obsidian prevents two notes pointing at each other; a naive
@@ -235,3 +240,27 @@ class TestDescendants:
 
     def test_leaf_has_no_descendants(self, populated):
         assert populated.descendants_of("Test at 320px") == []
+
+
+class TestLinkFiltersIgnoreCase:
+    """Consistent with lookup (G2), uniqueness (C4) and link checking (P6). A
+    case-sensitive filter returns an empty list, which reads as "no children" rather
+    than "you spelled it differently" -- the worst kind of wrong answer."""
+
+    def test_children_of_ignores_case(self, populated):
+        assert {n.title for n in populated.children_of("DESIGN SYSTEM")} == \
+               {n.title for n in populated.children_of("Design system")}
+
+    def test_descendants_of_ignores_case(self, populated):
+        assert {n.title for n in populated.descendants_of("website RELAUNCH")} == \
+               {n.title for n in populated.descendants_of("Website relaunch")}
+
+    def test_project_filter_ignores_case(self, populated):
+        assert {n.title for n in populated.list(project="WEBSITE RELAUNCH")} == \
+               {n.title for n in populated.list(project="Website relaunch")}
+
+    def test_non_link_filters_stay_exact(self, populated):
+        """Only links are case-insensitive; a status is a vocabulary term and must
+        match exactly, or the Triage view would stop catching typos."""
+        assert populated.list(status="DOING") == []
+        assert populated.list(status="doing")

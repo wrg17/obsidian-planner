@@ -23,6 +23,20 @@ def vault(repo):
 
 
 @pytest.fixture
+def other_vault(tmp_path):
+    """A second, independent vault.
+
+    `repo` and `vault` back the same directory the `client` fixture serves, so a test
+    that needs somewhere genuinely separate -- copying a note out and back, proving
+    two vaults do not see each other -- has to build its own.
+    """
+    root = tmp_path / "other"
+    for folder in CONTENT_FOLDERS:
+        (root / folder).mkdir(parents=True)
+    return NoteService(MarkdownNoteRepository(root))
+
+
+@pytest.fixture
 def populated(vault):
     """A small hierarchy: area -> project -> epic -> task -> subtask, plus a routine.
 
@@ -40,6 +54,17 @@ def populated(vault):
                  project="Website relaunch", type="feature")
     vault.create(kind="routine", title="Inbox to zero", recur="weekdays",
                  area="Studio", last_done=date(2026, 8, 21))
+    # A second epic gives cascade tests a sibling that must survive, and a blocked
+    # task gives the "non-structural reference" invariant something to point at.
+    vault.create(kind="epic", title="Content migration", parent="Website relaunch",
+                 project="Website relaunch", type="chore")
+    vault.create(kind="task", title="Export old posts", parent="Content migration",
+                 project="Website relaunch", type="chore", status="blocked",
+                 blocked_by=["Pick a type scale"])
+    vault.create(kind="task", title="Audit existing components", parent="Design system",
+                 project="Website relaunch", type="spike", status="todo")
+    # A doc: the ticket-only operations need a kind that tracks no completion.
+    vault.create(kind="doc", title="Worktop options", project="Website relaunch")
     return vault
 
 

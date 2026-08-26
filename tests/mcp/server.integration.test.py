@@ -43,7 +43,8 @@ class TestToolSchemas:
 class TestDispatch:
     def test_list(self, populated):
         out = call_tool("list_notes", {"kind": "epic"}, populated)
-        assert out["ok"] and [n["title"] for n in out["result"]] == ["Design system"]
+        assert out["ok"]
+        assert {n["title"] for n in out["result"]} == {"Design system", "Content migration"}
 
     def test_get(self, populated):
         out = call_tool("get_note", {"title": "Design system"}, populated)

@@ -15,7 +15,9 @@ import uuid
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from ..domain.errors import NoteExists, NoteNotFound, PlannerError, ValidationError
+from ..domain.errors import (
+    ChildrenExist, NoteExists, NoteNotFound, PlannerError, ValidationError,
+)
 
 log = logging.getLogger("planner.api")
 
@@ -25,6 +27,7 @@ STATUS_FOR = {
     ValidationError: 422,
     NoteNotFound: 404,
     NoteExists: 409,
+    ChildrenExist: 409,
 }
 
 

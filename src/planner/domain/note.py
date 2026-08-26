@@ -169,8 +169,11 @@ class Note:
         for key, value in out.items():
             lines.append(self._emit(key, value))
         lines.append("---")
-        body = self.body if self.body.strip() else f"\n# {self.title}\n"
-        return "\n".join(lines) + "\n" + body
+        # No default body here. Inventing one would make this serializer lossy: the
+        # Note in memory would no longer describe the bytes on disk, and POST would
+        # return something a subsequent GET contradicts. Defaults belong to the
+        # service, which sets them before the note is ever written.
+        return "\n".join(lines) + "\n" + self.body
 
     @staticmethod
     def _emit(key, value):

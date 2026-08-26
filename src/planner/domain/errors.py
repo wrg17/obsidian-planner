@@ -18,6 +18,14 @@ class NoteNotFound(PlannerError):
     pass
 
 
+class ChildrenExist(PlannerError):
+    """A delete would orphan child notes.
+
+    Separate from NoteExists because it maps to the same 409 but means the opposite
+    thing: not "this already exists" but "something depends on this".
+    """
+
+
 class NoteExists(PlannerError):
     """Titles are unique vault-wide -- Obsidian links by name, so Items/ is flat and
     two notes may not share a title even in different folders."""

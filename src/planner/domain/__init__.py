@@ -5,7 +5,9 @@ same rules back an HTTP API, an MCP server, and a CLI without any of them owning
 definition of what a task is.
 """
 
-from .errors import NoteExists, NoteNotFound, PlannerError, ValidationError
+from .errors import (
+    ChildrenExist, NoteExists, NoteNotFound, PlannerError, ValidationError,
+)
 from .note import Note, unwrap_link, wrap_link
 from .schema import (
     ALL_STATUS, CLOSED_STATUS, ISSUE_TYPE, KIND_NAMES, KINDS, PRIORITY_RANGE, RECUR,
@@ -15,7 +17,7 @@ from .schema import (
 
 __all__ = [
     "Note", "unwrap_link", "wrap_link",
-    "PlannerError", "ValidationError", "NoteNotFound", "NoteExists",
+    "PlannerError", "ValidationError", "NoteNotFound", "NoteExists", "ChildrenExist",
     "KINDS", "Kind", "KIND_NAMES", "TICKET_KINDS", "TICKET_STATUS", "ALL_STATUS",
     "ISSUE_TYPE", "RECUR", "PRIORITY_RANGE", "CLOSED_STATUS",
     "KindEnum", "StatusEnum", "IssueTypeEnum", "RecurEnum", "ClosingStatusEnum",
