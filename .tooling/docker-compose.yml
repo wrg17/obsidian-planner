@@ -1,0 +1,85 @@
+# The planner API with its audit database.
+#
+#   make up        start both
+#   make logs      follow
+#   make down      stop, keeping the database
+#   make clean     stop and delete the database volume
+#
+# Host ports avoid the ones a development machine is likely to be using: 55433 for
+# Postgres because 5432 is the conventional local one and 5433 is often an ssh tunnel.
+# The API keeps 8000, so `make up` and a locally-run `make run` cannot both hold it --
+# deliberately, since two writers on one vault is exactly what the journal exists to
+# survive rather than something to arrange on purpose.
+
+name: planner
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: planner
+      POSTGRES_PASSWORD: planner
+      POSTGRES_DB: planner
+    ports:
+      - "127.0.0.1:55433:5432"   # localhost only; this holds an audit trail
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready rather than a port check: Postgres accepts connections for some
+      # seconds before it will answer a query, and the API connects eagerly at startup.
+      test: ["CMD-SHELL", "pg_isready -U planner -d planner"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      args:
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    environment:
+      PLANNER_VAULT: /vault
+      PLANNER_DSN: postgresql://planner:planner@db:5432/planner
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # The note folders only, not the whole repository. Mounting `..` would put 280MB
+      # in the container's path -- 178MB of it the local virtualenv -- and hand it the
+      # source tree and .git as well, none of which the API reads. These five are the
+      # CONTENT_FOLDERS the repository actually scans.
+      - ../Items:/vault/Items
+      - ../Docs:/vault/Docs
+      - ../Meetings:/vault/Meetings
+      - ../Reviews:/vault/Reviews
+      - ../Journal:/vault/Journal
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Not started by `up`. `make test-docker` runs it.
+  test:
+    profiles: ["tools"]
+    build:
+      context: .
+      target: build
+    environment:
+      # Tells conftest to use this Postgres instead of spawning one, which it cannot do
+      # in a slim image with no server binaries.
+      PLANNER_TEST_DSN: postgresql://planner:planner@db:5432/planner
+    volumes:
+      # Tests need the source and the suite, so this one does mount the tree.
+      - ..:/repo
+    working_dir: /repo/.tooling
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "/opt/venv/bin/pip install --no-cache-dir -q -e '.[dev,api,mcp,postgres]'
+             && /opt/venv/bin/python -m pytest"
+
+volumes:
+  db-data:

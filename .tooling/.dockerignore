@@ -1,0 +1,14 @@
+# The build context is .tooling/, and the image needs only the package and its
+# metadata. Everything else here is either machine-local or output.
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+docs/api/
+tests/
+Dockerfile
+docker-compose.yml
+Makefile
