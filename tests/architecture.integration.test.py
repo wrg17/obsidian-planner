@@ -7,6 +7,7 @@ domain rule quietly importing FastAPI.
 
 import ast
 import pathlib
+from contextlib import contextmanager
 
 import pytest
 
@@ -102,6 +103,15 @@ def test_repository_is_swappable():
     class InMemory:
         def __init__(self):
             self.saved = {}
+
+        @contextmanager
+        def unit_of_work(self):
+            saved = dict(self.saved)
+            try:
+                yield self
+            except BaseException:
+                self.saved = saved
+                raise
 
         def get(self, title):
             from planner.domain.errors import NoteNotFound

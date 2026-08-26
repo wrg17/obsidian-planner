@@ -5,6 +5,8 @@ the real adapter satisfies it, an incomplete one does not, and the service depen
 the port rather than the adapter.
 """
 
+from contextlib import contextmanager
+
 import pytest
 
 from planner.domain.errors import NoteNotFound
@@ -17,6 +19,21 @@ class InMemoryRepository:
 
     def __init__(self):
         self.saved = {}
+
+
+    @contextmanager
+    def unit_of_work(self):
+        """Snapshot the whole store; restore it if the block raises.
+
+        Trivial for a dict, and that is the point: the port asks for all-or-nothing,
+        not for compensating commands. A backend with real transactions would use
+        them here."""
+        saved = dict(self.saved)
+        try:
+            yield self
+        except BaseException:
+            self.saved = saved
+            raise
 
     def get(self, title):
         if title not in self.saved:
@@ -69,7 +86,8 @@ class TestConformance:
         assert not isinstance(Missing(), NoteRepository)
 
     @pytest.mark.parametrize("method", [
-        "get", "exists", "titles", "iter_all", "iter_raw", "save", "delete"])
+        "get", "exists", "titles", "iter_all", "iter_raw", "save", "delete",
+        "unit_of_work"])
     def test_port_declares_the_whole_surface(self, method):
         assert hasattr(NoteRepository, method)
 

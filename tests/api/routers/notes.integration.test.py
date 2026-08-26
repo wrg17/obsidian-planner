@@ -457,3 +457,75 @@ class TestTitleIdentity:
     def test_children_lookup_is_case_insensitive_too(self, client):
         r = client.get("/notes/DESIGN SYSTEM/children")
         assert r.status_code == 200 and r.json()
+
+
+class TestBulkCreate:
+    """B1..B5 -- the endpoint the unit of work exists for."""
+
+    def test_B1_a_clean_batch_is_written(self, client):
+        r = client.post("/notes/bulk", json=[
+            {"kind": "task", "title": "Bulk one"},
+            {"kind": "task", "title": "Bulk two"},
+        ])
+        assert r.status_code == 201
+        assert [n["title"] for n in r.json()] == ["Bulk one", "Bulk two"]
+
+    def test_B1_one_bad_note_undoes_the_whole_batch(self, client, populated):
+        before = set(populated.repo.titles())
+        r = client.post("/notes/bulk", json=[
+            {"kind": "task", "title": "Bulk one"},
+            {"kind": "task", "title": "Bulk two"},
+            {"kind": "task", "title": "Bulk three", "parent": "Ghost"},
+        ])
+        assert r.status_code == 422
+        assert set(populated.repo.titles()) == before
+
+    def test_B1_a_duplicate_inside_the_batch_undoes_it(self, client, populated):
+        before = set(populated.repo.titles())
+        r = client.post("/notes/bulk", json=[
+            {"kind": "task", "title": "Twice"},
+            {"kind": "task", "title": "Twice"},
+        ])
+        assert r.status_code == 409
+        assert set(populated.repo.titles()) == before
+
+    def test_B2_per_note_rules_still_apply(self, client):
+        assert client.post("/notes/bulk", json=[
+            {"kind": "task", "title": "X", "status": "in-progress"}]).status_code == 422
+
+    def test_B2_defaults_are_applied_to_each(self, client):
+        body = client.post("/notes/bulk", json=[{"kind": "task", "title": "Defaulted"}]).json()
+        assert body[0]["status"] == "todo" and body[0]["done"] is False
+
+    def test_B3_a_parent_earlier_in_the_batch_is_visible_to_its_child(self, client):
+        r = client.post("/notes/bulk", json=[
+            {"kind": "epic", "title": "New epic", "parent": "Website relaunch",
+             "project": "Website relaunch"},
+            {"kind": "task", "title": "New task", "parent": "New epic"},
+        ])
+        assert r.status_code == 201
+
+    def test_B3_the_reverse_order_fails(self, client):
+        r = client.post("/notes/bulk", json=[
+            {"kind": "task", "title": "New task", "parent": "New epic"},
+            {"kind": "epic", "title": "New epic", "parent": "Website relaunch"},
+        ])
+        assert r.status_code == 422 and r.json()["field"] == "parent"
+
+    def test_B4_the_error_names_the_offending_note(self, client):
+        r = client.post("/notes/bulk", json=[
+            {"kind": "task", "title": "Fine"},
+            {"kind": "task", "title": "Broken", "parent": "Ghost"},
+        ])
+        detail = r.json()["detail"]
+        assert "Broken" in detail and "note 1" in detail
+
+    def test_an_empty_batch_is_accepted(self, client):
+        assert client.post("/notes/bulk", json=[]).json() == []
+
+    def test_the_batch_leaves_problems_empty(self, client):
+        client.post("/notes/bulk", json=[
+            {"kind": "doc", "title": "Bulk doc"},
+            {"kind": "meeting", "title": "Bulk meeting"},
+        ])
+        assert client.get("/problems").json() == []

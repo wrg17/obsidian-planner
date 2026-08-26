@@ -81,7 +81,7 @@ open, and so the vault can check itself, which markdown alone cannot.
 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp]"
-.venv/bin/pytest                                    # 476 tests, 99% coverage
+.venv/bin/pytest                                    # 545 tests, 99% coverage
 .venv/bin/uvicorn planner.api:app --reload          # http://127.0.0.1:8000/docs
 .venv/bin/python -m planner.mcp                     # MCP server over stdio
 ```
@@ -150,6 +150,7 @@ Swagger UI at `/docs`, OpenAPI at `/openapi.json`.
 |---|---|
 | `GET /notes` | filter by `kind`, `project`, `parent`, `status`, `open` |
 | `POST /notes` | folder derived from `kind`; defaults applied |
+| `POST /notes/bulk` | a batch as one transaction — all of them or none |
 | `GET·PATCH·DELETE /notes/{title}` | `null` in a PATCH removes the field |
 | `GET /notes/{title}/children` | `?recursive=true` for the whole subtree |
 | `POST /notes/{title}/close` · `/reopen` | the three fields that must move together |
@@ -159,6 +160,14 @@ Vocabularies are **declared enums**, not prose. `kind` is a `$ref` to a ten-valu
 generated from the domain, so `"Epic"` fails at the contract rather than deep inside —
 and Swagger renders a dropdown. Both validation layers return the same `{detail, field}`
 error shape, since which one fired is an implementation detail.
+
+**Writes are transactional.** Every filesystem mutation is a reversible command, and
+multi-note operations run inside a unit of work — so a cascade delete or a bulk create
+that fails part-way restores what it had already changed. Individual writes land by
+temp-file-and-rename, which is atomic on POSIX, so a crash cannot leave Obsidian a
+half-written note to parse. Two limits are documented rather than hidden: the
+transaction is not *isolated* (Obsidian sees each write as it lands, including ones
+later rolled back) and not *durable across a crash* (rollback happens in-process).
 
 Links are plain titles: send `"parent": "Design system"` and storage writes
 `parent: "[[Design system]]"`. Point at a vault with `PLANNER_VAULT=/path/to/vault`.

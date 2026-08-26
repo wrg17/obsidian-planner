@@ -12,7 +12,9 @@ import builtins
 from datetime import date
 
 from ..domain import schema
-from ..domain.errors import ChildrenExist, NoteExists, ValidationError
+from ..domain.errors import (
+    ChildrenExist, NoteExists, PlannerError, ValidationError,
+)
 from ..domain.note import Note
 from ..repository.base import NoteRepository
 
@@ -169,13 +171,41 @@ class NoteService:
                 f"{title!r} has {len(children)} child note(s): "
                 f"{[c.title for c in children]}. Re-parent them, or pass cascade.")
         removed = []
-        if cascade:
-            for note in reversed(self.descendants_of(title)):
-                self.repo.delete(note.title)
-                removed.append(note.title)
-        self.repo.delete(title)
-        removed.append(title)
+        # One transaction for the whole subtree. Without it a failure part-way leaves
+        # some children deleted and the rest pointing at a parent that is about to be,
+        # or already is, gone -- the exact state D2 exists to prevent, arrived at by a
+        # different road.
+        with self.repo.unit_of_work():
+            if cascade:
+                for note in reversed(self.descendants_of(title)):
+                    self.repo.delete(note.title)
+                    removed.append(note.title)
+            self.repo.delete(title)
+            removed.append(title)
         return removed
+
+    def create_many(self, notes) -> builtins.list[Note]:
+        """Create several notes as one transaction.
+
+        Order matters and is the caller's: a child listed before its parent fails the
+        `parent` check, because validation runs against what is actually on disk at
+        that moment rather than against a promise about the rest of the batch. Making
+        it order-independent would mean deferring referential checks to commit time,
+        which trades a clear error for a confusing one.
+        """
+        created = []
+        with self.repo.unit_of_work():
+            for index, note in enumerate(notes):
+                try:
+                    created.append(self.create(note))
+                except PlannerError as exc:
+                    # Name the offender. A 422 reporting only that "one of these
+                    # twelve is wrong" leaves the caller to bisect the batch by hand.
+                    raise type(exc)(
+                        f"note {index} ({note.title!r}): {exc}",
+                        *([exc.field] if isinstance(exc, ValidationError) else []),
+                    ) from exc
+        return created
 
     def close(self, title: str, status: str = "done", on: date | None = None) -> Note:
         """Close a ticket: status, the `done` checkbox and the `closed` date together.

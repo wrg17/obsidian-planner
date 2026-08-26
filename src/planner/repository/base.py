@@ -48,3 +48,12 @@ class NoteRepository(Protocol):
 
     def delete(self, title: str) -> None:
         """Raises NoteNotFound."""
+
+    def unit_of_work(self):
+        """A context manager grouping writes so they succeed or fail together.
+
+        Part of the port because the service needs multi-note operations to be
+        all-or-nothing without knowing what the store is. A backend with real
+        transactions can implement this with them; the markdown adapter compensates
+        with reversible commands. An in-memory double can snapshot a dict.
+        """

@@ -89,6 +89,34 @@ def create_note(payload: NoteIn, service: NoteService = Depends(get_service)):
     return service.create(Note.from_dict(payload.model_dump(exclude_none=True))).to_dict()
 
 
+@router.post("/bulk", response_model=list[NoteOut], status_code=201,
+             summary="Create several notes as one transaction",
+             responses={409: {"model": ErrorOut}})
+def create_many(payload: list[NoteIn], service: NoteService = Depends(get_service)):
+    """Create a batch. Either all of them exist afterwards, or none do.
+
+    INVARIANTS
+      B1. All-or-nothing. One rejected note undoes the whole batch, restoring any file
+          already written. This is the operation the unit of work exists for -- a
+          partial batch is exactly the half-built hierarchy the closure invariant
+          forbids. (S1, S3)
+      B2. Every per-note rule from POST still applies. This is a transaction around
+          `create`, not a second, laxer path into the vault.
+      B3. Order is significant and is the caller's to choose. A child listed before
+          its parent fails, because each note is validated against what is on disk at
+          that moment rather than against a promise about the rest of the batch.
+          Deferring referential checks to commit time would trade a precise error for
+          a confusing one.
+      B4. The error names the note that failed, not just the batch -- a 422 saying
+          only "one of these twelve is wrong" is close to useless.
+      B5. Non-atomic outside this process. A crash mid-batch leaves earlier notes
+          written; individual files are still whole, because every write lands by
+          atomic rename. (Documented limit of the unit of work.)
+    """
+    notes = [Note.from_dict(item.model_dump(exclude_none=True)) for item in payload]
+    return [n.to_dict() for n in service.create_many(notes)]
+
+
 @router.get("/{title}", response_model=NoteOut, summary="Fetch one note",
             responses={404: {"model": ErrorOut}})
 def get_note(title: str, service: NoteService = Depends(get_service)):

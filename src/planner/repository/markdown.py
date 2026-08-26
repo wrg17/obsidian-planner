@@ -15,9 +15,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable, Iterator
 
+from contextlib import contextmanager
+
 from ..domain import schema
 from ..domain.errors import NoteNotFound, ValidationError
 from ..domain.note import Note
+from .commands import CreateDirectory, DeleteFile, WriteFile
+from .unit_of_work import UnitOfWork
 
 def _names_in(directory: Path) -> set[str]:
     """Actual directory entries, so a case-insensitive filesystem cannot pass off the
@@ -36,6 +40,40 @@ CONTENT_FOLDERS = ("Items", "Docs", "Meetings", "Reviews", "Journal")
 class MarkdownNoteRepository:
     def __init__(self, root: str | Path):
         self.root = Path(root)
+        # An ambient transaction rather than one passed to every call. The service
+        # already reads as `self.repo.save(...)`; threading a uow argument through
+        # every one of those would put transaction plumbing in the layer that is
+        # supposed to be about rules. Safe because dependencies.get_repository builds
+        # a fresh repository per request, so this is never shared across callers.
+        self._uow = UnitOfWork()
+
+    @contextmanager
+    def unit_of_work(self):
+        """Group writes so they succeed or fail together.
+
+            with repo.unit_of_work():
+                repo.save(a)
+                repo.delete(b)      # if this raises, `a` is restored
+
+        Nesting joins the outer transaction rather than opening a new one.
+        """
+        with self._uow as uow:
+            yield uow
+
+    def _run(self, *commands) -> None:
+        """Apply commands, inside the active transaction if there is one.
+
+        Outside a transaction each call is its own single-command unit, so an
+        individual save is still atomic -- the temp-file-and-rename in WriteFile -- and
+        the two paths cannot diverge in behaviour.
+        """
+        if self._uow.active:
+            for command in commands:
+                self._uow.execute(command)
+            return
+        with self._uow:
+            for command in commands:
+                self._uow.execute(command)
 
     # --- locating -----------------------------------------------------------------
 
@@ -129,12 +167,12 @@ class MarkdownNoteRepository:
     def save(self, note: Note) -> Note:
         existing = self.find(note.title)
         target = existing or self.path_for(note.kind, note.title)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(note.to_markdown(), encoding="utf-8")
+        self._run(CreateDirectory(target.parent),
+                  WriteFile(target, note.to_markdown()))
         return note
 
     def delete(self, title: str) -> None:
         path = self.find(title)
         if path is None:
             raise NoteNotFound(f"no note titled {title!r}")
-        path.unlink()
+        self._run(DeleteFile(path))
