@@ -131,3 +131,29 @@ class TestSwaggerGreysAreOverridden:
         """Translucent Dracula grey over the Dracula background stays Dracula;
         translucent black over it does not."""
         assert "rgba(68, 71, 90" in DRACULA_CSS
+
+
+class TestFavicon:
+    def test_it_is_served_inline(self, client):
+        """Swagger's default points at fastapi.tiangolo.com, so every tab load fetched
+        a picture from someone else's server -- and showed nothing at all offline,
+        which for a planner on a laptop is often."""
+        body = client.get("/docs").text
+        assert "fastapi.tiangolo.com" not in body
+        assert "data:image/svg+xml" in body
+
+    def test_it_uses_the_palette(self):
+        from planner.api.docs import FAVICON
+        for colour in ("bd93f9", "8be9fd", "282a36"):     # purple, cyan, background
+            assert colour in FAVICON
+
+    def test_it_is_a_complete_svg(self):
+        from planner.api.docs import FAVICON
+        assert FAVICON.startswith("data:image/svg+xml,")
+        assert FAVICON.endswith("%3C/svg%3E")
+
+    def test_it_is_small_enough_to_inline(self):
+        """Inlining is only worth it while it stays cheap; a big one belongs in a
+        file served as a route."""
+        from planner.api.docs import FAVICON
+        assert len(FAVICON) < 2000

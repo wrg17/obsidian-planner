@@ -230,6 +230,35 @@ body, .swagger-ui {{ background: {BACKGROUND}; color: {FOREGROUND}; }}
 """
 
 
+#: A robot, drawn as an inline SVG data URI rather than fetched.
+#:
+#: Swagger's default favicon is hosted on fastapi.tiangolo.com, so every tab load was
+#: a request to somebody else's server for a picture -- and a blank icon whenever this
+#: runs somewhere without internet, which for a planner on a laptop is often. Inlining
+#: it costs a few hundred bytes and removes the dependency.
+#:
+#: Coloured from the same palette as everything else: purple face, cyan eyes.
+FAVICON = (
+    "data:image/svg+xml,"
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
+    f"%3Crect width='32' height='32' rx='7' fill='%23{BACKGROUND[1:]}'/%3E"
+    # antenna
+    f"%3Cline x1='16' y1='4' x2='16' y2='8' stroke='%23{PURPLE[1:]}' stroke-width='2'/%3E"
+    f"%3Ccircle cx='16' cy='4' r='2' fill='%23{PINK[1:]}'/%3E"
+    # head
+    f"%3Crect x='6' y='8' width='20' height='16' rx='5' fill='%23{PURPLE[1:]}'/%3E"
+    # eyes
+    f"%3Ccircle cx='12' cy='15' r='2.6' fill='%23{CYAN[1:]}'/%3E"
+    f"%3Ccircle cx='20' cy='15' r='2.6' fill='%23{CYAN[1:]}'/%3E"
+    # mouth
+    f"%3Crect x='11' y='19.5' width='10' height='2' rx='1' fill='%23{BACKGROUND[1:]}'/%3E"
+    # ears
+    f"%3Crect x='3' y='13' width='2.5' height='6' rx='1.2' fill='%23{PINK[1:]}'/%3E"
+    f"%3Crect x='26.5' y='13' width='2.5' height='6' rx='1.2' fill='%23{PINK[1:]}'/%3E"
+    "%3C/svg%3E"
+)
+
+
 def swagger_ui(*, openapi_url: str, title: str) -> HTMLResponse:
     """The stock Swagger UI page with the override sheet appended.
 
@@ -237,7 +266,8 @@ def swagger_ui(*, openapi_url: str, title: str) -> HTMLResponse:
     layout, and reimplementing that to change colours would be a far larger thing to
     keep working across upgrades.
     """
-    page = get_swagger_ui_html(openapi_url=openapi_url, title=title)
+    page = get_swagger_ui_html(openapi_url=openapi_url, title=title,
+                               swagger_favicon_url=FAVICON)
     html = page.body.decode()
     html = html.replace("</head>", f"<style>{DRACULA_CSS}</style></head>")
     return HTMLResponse(html)
