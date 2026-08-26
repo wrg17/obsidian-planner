@@ -21,6 +21,9 @@ class InMemoryRepository:
         self.saved = {}
 
 
+    def has_pending_transaction(self):
+        return False
+
     @contextmanager
     def unit_of_work(self):
         """Snapshot the whole store; restore it if the block raises.
@@ -87,7 +90,7 @@ class TestConformance:
 
     @pytest.mark.parametrize("method", [
         "get", "exists", "titles", "iter_all", "iter_raw", "save", "delete",
-        "unit_of_work"])
+        "unit_of_work", "has_pending_transaction"])
     def test_port_declares_the_whole_surface(self, method):
         assert hasattr(NoteRepository, method)
 

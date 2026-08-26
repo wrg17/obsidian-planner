@@ -91,12 +91,38 @@ S9. ROUND-TRIP FIDELITY (guarantee)
 
 from __future__ import annotations
 
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
+from .dependencies import get_repository
 from .middleware import correlation_id, install_error_handlers
 from .routers import meta, notes
+
+log = logging.getLogger("planner.api")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Recover any transaction a crash abandoned, before serving a single request.
+
+    Serving first would let a client read a vault that is halfway through an operation
+    nobody is going to finish. It costs one stat when there is nothing to recover.
+
+    Conflicts are logged rather than raised: a file changed outside this process since
+    the crash is left exactly as it is, and refusing to start over it would strand the
+    user with an API they cannot use to fix their own notes.
+    """
+    report = get_repository().recover()
+    if report:
+        log.warning("recovered an interrupted transaction: %d restored, %d untouched",
+                    len(report.restored), len(report.untouched))
+        for conflict in report.conflicts:
+            log.warning("left alone (%s): %s", conflict.reason, conflict.path)
+    yield
 
 DESCRIPTION = """
 Jira-style tickets and Confluence-style docs over an Obsidian vault.
@@ -133,6 +159,7 @@ what this API will never itself do, and what it will tell you about afterwards.
 
 def create_app() -> FastAPI:
     app = FastAPI(
+        lifespan=lifespan,
         title="Planner",
         version="0.2.0",
         summary="Typed tickets and docs over an Obsidian vault.",

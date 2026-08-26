@@ -193,3 +193,24 @@ class TestHealth:
         """The commonest deployment mistake is PLANNER_VAULT pointing somewhere
         unexpected; hiding the answer makes that harder to find."""
         assert client.get("/health").json()["vault"] == str(populated.repo.root)
+
+
+class TestHealthReportsInterruptedTransactions:
+    """N5 -- the one condition where the vault may hold state nobody intended."""
+
+    def test_clean_vault_reports_none(self, client):
+        assert client.get("/health").json()["interrupted_transaction"] is False
+
+    def test_a_leftover_journal_is_surfaced(self, client, populated):
+        from planner.repository.journal import Entry, Journal, digest
+        Journal(populated.repo.root).record(
+            Entry("Items/T.md", None, digest(b"x"), None))
+        assert client.get("/health").json()["interrupted_transaction"] is True
+
+    def test_still_200_so_the_condition_is_readable(self, client, populated):
+        """Failing the health check would take the service out of rotation exactly
+        when someone needs the API to inspect what happened."""
+        from planner.repository.journal import Entry, Journal, digest
+        Journal(populated.repo.root).record(
+            Entry("Items/T.md", None, digest(b"x"), None))
+        assert client.get("/health").status_code == 200

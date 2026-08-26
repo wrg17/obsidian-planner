@@ -226,3 +226,53 @@ class TestCreateDirectory:
     def test_creates_nested_paths(self, tmp_path):
         CreateDirectory(tmp_path / "a" / "b" / "c").execute()
         assert (tmp_path / "a" / "b" / "c").is_dir()
+
+
+class TestPrepareApplySplit:
+    """Execution is split so the journal can record intent between reading the world
+    and changing it. Applying without preparing would write with no undo captured."""
+
+    def test_write_refuses_to_apply_unprepared(self, target):
+        with pytest.raises(CommandError, match="not prepared"):
+            WriteFile(target, "x").apply()
+
+    def test_delete_refuses_to_apply_unprepared(self, target):
+        target.write_text("x")
+        with pytest.raises(CommandError, match="not prepared"):
+            DeleteFile(target).apply()
+
+    def test_prepare_changes_nothing(self, target):
+        target.write_text("original")
+        WriteFile(target, "new").prepare()
+        assert target.read_text() == "original"
+
+    def test_journal_entry_describes_both_ends(self, tmp_path):
+        target = tmp_path / "a.md"
+        target.write_text("before")
+        command = WriteFile(target, "after")
+        command.prepare()
+        entry = command.journal_entry(tmp_path)
+        assert entry.path == "a.md"
+        assert entry.prior_content == "before"
+        assert entry.prior_hash != entry.intended_hash
+
+    def test_journal_entry_for_a_new_file_has_no_prior(self, tmp_path):
+        command = WriteFile(tmp_path / "a.md", "new")
+        command.prepare()
+        entry = command.journal_entry(tmp_path)
+        assert entry.prior_hash is None and entry.prior_content is None
+
+    def test_journal_entry_for_a_delete_intends_absence(self, tmp_path):
+        target = tmp_path / "a.md"
+        target.write_text("doomed")
+        command = DeleteFile(target)
+        command.prepare()
+        entry = command.journal_entry(tmp_path)
+        assert entry.intended_hash is None and entry.prior_content == "doomed"
+
+    def test_a_directory_needs_no_journal_entry(self, tmp_path):
+        """It holds no content to lose, and undo already refuses to remove one it did
+        not create or one that is no longer empty."""
+        command = CreateDirectory(tmp_path / "new")
+        command.prepare()
+        assert command.journal_entry(tmp_path) is None

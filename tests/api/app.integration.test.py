@@ -330,3 +330,40 @@ class TestOpenApi:
         description = client.get("/openapi.json").json()["info"]["description"]
         for marker in ("S1", "S4", "S8", "S9", "CLOSURE", "guarantee", "detection"):
             assert marker in description, f"{marker!r} missing from the published description"
+
+
+class TestStartupRecovery:
+    """A crash mid-transaction is undone before the first request is served."""
+
+    def test_recovery_runs_at_startup(self, populated, monkeypatch):
+        from fastapi.testclient import TestClient
+        from planner.api import app
+        from planner.repository.journal import Entry, Journal, digest
+
+        target = populated.repo.find("Pick a type scale")
+        original = target.read_bytes()
+        Journal(populated.repo.root).record(
+            Entry("Items/Pick a type scale.md", digest(original),
+                  digest(b"half-written"), original.decode()))
+        target.write_bytes(b"half-written")
+
+        monkeypatch.setenv("PLANNER_VAULT", str(populated.repo.root))
+        with TestClient(app) as fresh:          # lifespan runs on enter
+            assert fresh.get("/notes/Pick a type scale").status_code == 200
+        assert target.read_bytes() == original
+
+    def test_a_conflict_does_not_prevent_startup(self, populated, monkeypatch):
+        """Refusing to start would strand the user with an API they cannot use to fix
+        their own notes."""
+        from fastapi.testclient import TestClient
+        from planner.api import app
+        from planner.repository.journal import Entry, Journal, digest
+
+        target = populated.repo.find("Pick a type scale")
+        Journal(populated.repo.root).record(
+            Entry("Items/Pick a type scale.md", digest(b"something else"),
+                  digest(b"ours"), "something else"))
+
+        monkeypatch.setenv("PLANNER_VAULT", str(populated.repo.root))
+        with TestClient(app) as fresh:
+            assert fresh.get("/health").json()["status"] == "ok"

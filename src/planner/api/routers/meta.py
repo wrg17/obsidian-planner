@@ -109,6 +109,15 @@ def health(service: NoteService = Depends(get_service)):
       N4. Discloses the resolved vault path, because the commonest deployment mistake
           here is a PLANNER_VAULT pointing somewhere unexpected, and a health check
           that hides the answer makes that harder to see rather than easier.
+      N5. Reports an interrupted transaction. A journal still on disk means startup
+          recovery has not run or could not finish, and the vault may hold state
+          nobody intended -- the one thing a health check must not stay quiet about.
     """
-    root = service.repo.root
-    return {"status": "ok" if root.is_dir() else "vault-missing", "vault": str(root)}
+    status = service.vault_status()
+    return {
+        "status": "ok" if status["reachable"] else "vault-missing",
+        "vault": status["vault"],
+        # An interrupted transaction means the vault may hold state nobody intended --
+        # the one condition a health check must not stay quiet about.
+        "interrupted_transaction": status["interrupted_transaction"],
+    }

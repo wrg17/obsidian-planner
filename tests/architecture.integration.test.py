@@ -104,6 +104,9 @@ def test_repository_is_swappable():
         def __init__(self):
             self.saved = {}
 
+        def has_pending_transaction(self):
+            return False
+
         @contextmanager
         def unit_of_work(self):
             saved = dict(self.saved)

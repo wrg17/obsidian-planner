@@ -33,10 +33,25 @@ class CommandError(RuntimeError):
 
 @runtime_checkable
 class Command(Protocol):
-    """One reversible filesystem mutation."""
+    """One reversible filesystem mutation.
+
+    Execution is split so a write-ahead journal can record intent between the two
+    halves: `prepare` reads the world, the journal is flushed, then `apply` changes it.
+    `execute` runs both for callers that need no journal.
+    """
+
+    def prepare(self) -> None:
+        """Capture whatever `undo` will need. Changes nothing."""
+
+    def apply(self) -> None:
+        """Make the change. Only valid after `prepare`."""
+
+    def journal_entry(self, root):
+        """A record sufficient to undo this without the command object, or None if the
+        command needs no journalling."""
 
     def execute(self) -> None:
-        """Apply. Must capture whatever `undo` will need, at this moment."""
+        """Prepare and apply in one step."""
 
     def undo(self) -> None:
         """Restore the state that existed immediately before `execute` ran."""
@@ -51,6 +66,7 @@ class _Base:
     def __init__(self, path: Path):
         self.path = Path(path)
         self._executed = False
+        self._prepared = False
         self._existed: bool | None = None
         self._previous: bytes | None = None
 
@@ -62,6 +78,33 @@ class _Base:
     def _guard_execute(self) -> None:
         if self._executed:
             raise CommandError(f"{self.describe()} has already run")
+
+    def prepare(self) -> None:
+        self._guard_execute()
+        self._capture()
+        self._prepared = True
+
+    def execute(self) -> None:
+        self.prepare()
+        self.apply()
+
+    def journal_entry(self, root: Path):
+        """Prior and intended hashes, plus the bytes needed to put things back.
+
+        Prior content rather than a reference to it: after a crash the command object
+        is gone, so the journal has to be self-sufficient.
+        """
+        from .journal import Entry, digest
+        return Entry(
+            path=str(self.path.relative_to(root)),
+            prior_hash=digest(self._previous),
+            intended_hash=self._intended_hash(),
+            prior_content=None if self._previous is None
+            else self._previous.decode("utf-8", errors="surrogateescape"),
+        )
+
+    def _intended_hash(self) -> str | None:      # pragma: no cover - overridden
+        raise NotImplementedError
 
     def _restore(self) -> None:
         if self._existed:
@@ -108,11 +151,15 @@ class WriteFile(_Base):
         super().__init__(path)
         self.content = content
 
-    def execute(self) -> None:
-        self._guard_execute()
-        self._capture()
+    def apply(self) -> None:
+        if not self._prepared:
+            raise CommandError(f"{self.describe()} was not prepared")
         _atomic_write(self.path, self.content.encode("utf-8"))
         self._executed = True
+
+    def _intended_hash(self) -> str | None:
+        from .journal import digest
+        return digest(self.content.encode("utf-8"))
 
     def describe(self) -> str:
         verb = "overwrite" if self.path.is_file() else "create"
@@ -122,13 +169,21 @@ class WriteFile(_Base):
 class DeleteFile(_Base):
     """Remove a file. Undo puts the bytes back."""
 
-    def execute(self) -> None:
+    def prepare(self) -> None:
         self._guard_execute()
         if not self.path.is_file():
             raise CommandError(f"cannot delete missing file {self.path}")
         self._capture()
+        self._prepared = True
+
+    def apply(self) -> None:
+        if not self._prepared:
+            raise CommandError(f"{self.describe()} was not prepared")
         self.path.unlink()
         self._executed = True
+
+    def _intended_hash(self) -> str | None:
+        return None                     # the file is meant to be gone
 
     def describe(self) -> str:
         return f"delete {self.path.name}"
@@ -143,11 +198,23 @@ class CreateDirectory:
         self.path = Path(path)
         self._created = False
 
-    def execute(self) -> None:
+    def prepare(self) -> None:
+        pass                            # nothing to capture; undo is self-describing
+
+    def apply(self) -> None:
         if self.path.is_dir():
             return
         self.path.mkdir(parents=True, exist_ok=True)
         self._created = True
+
+    def execute(self) -> None:
+        self.prepare()
+        self.apply()
+
+    def journal_entry(self, root):
+        """None: a directory holds no content to lose, and `undo` already refuses to
+        remove one it did not create or one that is no longer empty."""
+        return None
 
     def undo(self) -> None:
         if not self._created:

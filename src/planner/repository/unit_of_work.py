@@ -17,12 +17,12 @@ Two limits, stated rather than hidden:
                  back. Nothing short of a lock file would change that, and locking a
                  vault the user is editing is worse than the flicker.
 
-  NOT DURABLE ACROSS A CRASH
-                 Rollback happens in this process. If it dies mid-transaction, earlier
-                 commands stay applied. Individual writes are still atomic, so nothing
-                 is corrupt -- but the operation may be half-done. A journal on disk
-                 would close this; it is not worth the complexity until an operation
-                 spans more files than a person can eyeball.
+  DURABLE, WITH A JOURNAL
+                 Given one, intent is flushed to disk before each change lands, so a
+                 crash mid-transaction is undone on the next startup -- see
+                 journal.py, and repository.recover(). Without one, rollback is
+                 in-process only and a crash leaves the operation half-done (though
+                 never any individual file corrupt, because writes land by rename).
 """
 
 from __future__ import annotations
@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 
 from .commands import Command, CommandError
+from .journal import Journal
 
 log = logging.getLogger("planner.repository")
 
@@ -52,10 +53,11 @@ class RollbackError(CommandError):
 
 
 class UnitOfWork:
-    def __init__(self):
+    def __init__(self, journal: Journal | None = None):
         self._done: list[Command] = []
         self._depth = 0
         self._failed = False
+        self._journal = journal
 
     # --- participation ------------------------------------------------------------
 
@@ -75,14 +77,24 @@ class UnitOfWork:
         return self
 
     def execute(self, command: Command) -> None:
-        """Run a command and record it for possible rollback.
+        """Run a command, journalling intent first and recording it for rollback.
 
-        Recorded before the outcome is known, because a command that fails partway may
-        still have changed something -- WriteFile can have replaced the file and then
-        failed to fsync. Undo is safe on a command that did nothing.
+        The order is the whole point of splitting prepare from apply: read the world,
+        write down what we are about to do to it, and only then do it. A crash between
+        the flush and the change is recoverable; a crash before the flush leaves
+        nothing to recover because nothing happened.
+
+        Recorded for rollback before the outcome is known, because a command that
+        fails partway may still have changed something. Undo is safe on a command that
+        did nothing.
         """
+        command.prepare()
+        if self._journal is not None:
+            entry = command.journal_entry(self._journal.root)
+            if entry is not None:
+                self._journal.record(entry)
         self._done.append(command)
-        command.execute()
+        command.apply()
 
     # --- completion ---------------------------------------------------------------
 
@@ -95,10 +107,18 @@ class UnitOfWork:
             self._failed = True
         if self._depth > 0:
             return False                # inner scope: outcome is the outer one's call
-        if self._failed:
-            self.rollback(exc)
-        self._done.clear()
-        self._failed = False
+        try:
+            if self._failed:
+                self.rollback(exc)
+        finally:
+            self._done.clear()
+            self._failed = False
+            if self._journal is not None:
+                # Cleared on both paths: after a commit there is nothing to recover,
+                # and after an in-process rollback the vault is already back where it
+                # started. A journal left behind would make the next startup "recover"
+                # a transaction that has already been dealt with.
+                self._journal.clear()
         return False                    # never swallow the original exception
 
     def rollback(self, cause: BaseException | None = None) -> None:

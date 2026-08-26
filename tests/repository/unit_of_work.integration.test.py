@@ -16,6 +16,34 @@ class Boom(Exception):
     """A failure raised by the caller, not by a command."""
 
 
+class FakeCommand:
+    """A command that touches nothing, for testing ordering and failure handling.
+
+    Implements the whole protocol including the journalling half, so it exercises the
+    same path a real command does. `journal_entry` returns None -- it has no file to
+    record, like CreateDirectory.
+    """
+
+    def prepare(self):
+        pass
+
+    def apply(self):
+        pass
+
+    def execute(self):
+        self.prepare()
+        self.apply()
+
+    def journal_entry(self, root):
+        return None
+
+    def undo(self):
+        pass
+
+    def describe(self):
+        return type(self).__name__
+
+
 class TestCommitPath:
     def test_commands_are_applied_on_a_clean_exit(self, tmp_path):
         with UnitOfWork() as uow:
@@ -74,12 +102,9 @@ class TestRollback:
         leave the earlier undo with nothing to restore."""
         order = []
 
-        class Recording:
+        class Recording(FakeCommand):
             def __init__(self, name):
                 self.name = name
-
-            def execute(self):
-                pass
 
             def undo(self):
                 order.append(self.name)
@@ -115,10 +140,7 @@ class TestRollbackFailure:
         started than finishing does."""
         attempted = []
 
-        class Stubborn:
-            def execute(self):
-                pass
-
+        class Stubborn(FakeCommand):
             def undo(self):
                 attempted.append("stubborn")
                 raise OSError("permission denied")
@@ -126,10 +148,7 @@ class TestRollbackFailure:
             def describe(self):
                 return "stubborn"
 
-        class Fine:
-            def execute(self):
-                pass
-
+        class Fine(FakeCommand):
             def undo(self):
                 attempted.append("fine")
 
@@ -146,10 +165,7 @@ class TestRollbackFailure:
     def test_the_error_carries_both_faults(self, tmp_path):
         """The original explains what was attempted; the rollback failure explains
         what is now inconsistent. Someone has to reconcile that by hand."""
-        class Stubborn:
-            def execute(self):
-                pass
-
+        class Stubborn(FakeCommand):
             def undo(self):
                 raise OSError("permission denied")
 

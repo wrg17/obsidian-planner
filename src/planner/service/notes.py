@@ -87,6 +87,20 @@ class NoteService:
                 frontier.append(child.title)
         return sorted(found, key=lambda n: n.title)
 
+    def vault_status(self) -> dict:
+        """Whether the vault is reachable and whether a transaction was interrupted.
+
+        Here rather than in the controller because "is there a journal on disk" is a
+        fact about the store, and a controller that knew the answer would be reaching
+        past the service into the backend it is not supposed to know about.
+        """
+        root = self.repo.root
+        return {
+            "reachable": root.is_dir(),
+            "interrupted_transaction": self.repo.has_pending_transaction(),
+            "vault": str(root),
+        }
+
     def problems(self) -> builtins.list[tuple[str, str]]:
         """Notes that will not parse or do not validate.
 

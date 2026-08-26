@@ -49,6 +49,14 @@ class NoteRepository(Protocol):
     def delete(self, title: str) -> None:
         """Raises NoteNotFound."""
 
+    def has_pending_transaction(self) -> bool:
+        """True when an interrupted transaction is awaiting recovery.
+
+        Part of the port because callers need to surface the condition without knowing
+        how the backend records it -- a journal file here, an uncommitted transaction
+        elsewhere.
+        """
+
     def unit_of_work(self):
         """A context manager grouping writes so they succeed or fail together.
 

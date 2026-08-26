@@ -81,7 +81,7 @@ open, and so the vault can check itself, which markdown alone cannot.
 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp]"
-.venv/bin/pytest                                    # 545 tests, 99% coverage
+.venv/bin/pytest                                    # 588 tests, 99% coverage
 .venv/bin/uvicorn planner.api:app --reload          # http://127.0.0.1:8000/docs
 .venv/bin/python -m planner.mcp                     # MCP server over stdio
 ```
@@ -165,9 +165,28 @@ error shape, since which one fired is an implementation detail.
 multi-note operations run inside a unit of work — so a cascade delete or a bulk create
 that fails part-way restores what it had already changed. Individual writes land by
 temp-file-and-rename, which is atomic on POSIX, so a crash cannot leave Obsidian a
-half-written note to parse. Two limits are documented rather than hidden: the
+half-written note to parse. **A crash is recoverable.** Intent is flushed to a write-ahead journal before each
+change lands, and startup undoes anything a crash abandoned. The interesting case is a
+file that changed *after* the crash: provenance is not observable — the filesystem
+stores bytes, not an author — so recovery compares hashes instead.
+
+| file at recovery | inference | action |
+|---|---|---|
+| matches the recorded prior | our write never landed | nothing |
+| matches what we intended | our write landed, transaction broke | restore prior |
+| matches neither | someone edited it after the crash | **leave it**, report a conflict |
+
+The last row is the one that matters: a change we cannot account for can only have come
+from a person editing their own notes, and their edit is newer than our abandoned
+transaction. `GET /health` reports an interrupted transaction so the condition is never
+silent.
+
+Three limits are documented rather than hidden — see `repository/journal.py`. The
 transaction is not *isolated* (Obsidian sees each write as it lands, including ones
-later rolled back) and not *durable across a crash* (rollback happens in-process).
+later rolled back); recovery never *rolls forward*; and clearing the journal cannot be
+atomic with the last file write, so a crash in that window undoes a transaction that
+actually succeeded. The last needs two-phase commit to fix, and the filesystem cannot
+participate.
 
 Links are plain titles: send `"parent": "Design system"` and storage writes
 `parent: "[[Design system]]"`. Point at a vault with `PLANNER_VAULT=/path/to/vault`.

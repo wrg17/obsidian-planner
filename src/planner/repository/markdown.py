@@ -21,6 +21,7 @@ from ..domain import schema
 from ..domain.errors import NoteNotFound, ValidationError
 from ..domain.note import Note
 from .commands import CreateDirectory, DeleteFile, WriteFile
+from .journal import Journal, RecoveryReport
 from .unit_of_work import UnitOfWork
 
 def _names_in(directory: Path) -> set[str]:
@@ -45,7 +46,25 @@ class MarkdownNoteRepository:
         # every one of those would put transaction plumbing in the layer that is
         # supposed to be about rules. Safe because dependencies.get_repository builds
         # a fresh repository per request, so this is never shared across callers.
-        self._uow = UnitOfWork()
+        self.journal = Journal(self.root)
+        self._uow = UnitOfWork(self.journal)
+
+    def has_pending_transaction(self) -> bool:
+        """True when a journal is on disk, i.e. a transaction was interrupted and
+        recovery has not run or could not finish."""
+        return self.journal.path.is_file()
+
+    def recover(self) -> RecoveryReport:
+        """Undo any transaction abandoned by a crash. Safe to call at any time.
+
+        Call once at startup, before serving. It is a single stat when there is
+        nothing to do, so it costs nothing on the normal path.
+
+        Files changed since the crash by anything other than us are reported as
+        conflicts and left exactly as they are -- see journal.py for why that is the
+        only defensible choice when provenance is not observable.
+        """
+        return self.journal.recover()
 
     @contextmanager
     def unit_of_work(self):
@@ -127,7 +146,8 @@ class MarkdownNoteRepository:
         for folder in CONTENT_FOLDERS:
             directory = self.root / folder
             if directory.is_dir():
-                yield from sorted(directory.glob("*.md"))
+                yield from sorted(p for p in directory.glob("*.md")
+                                  if not p.name.startswith("."))
 
     # --- reading ------------------------------------------------------------------
 
