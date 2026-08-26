@@ -154,3 +154,84 @@ class TestDelete:
     def test_missing_raises(self, vault):
         with pytest.raises(NoteNotFound):
             vault.delete("Nope")
+
+
+class TestTitleUniquenessIsCaseInsensitive:
+    """macOS is case-insensitive by default, Linux is not. An exact-match check would
+    create two notes on one machine and silently overwrite on the other."""
+
+    def test_same_title_different_case_is_refused(self, vault):
+        vault.create(kind="task", title="Design System")
+        with pytest.raises(NoteExists, match="differ only by case"):
+            vault.create(kind="task", title="design system")
+
+    def test_the_message_names_the_existing_title(self, vault):
+        vault.create(kind="task", title="Design System")
+        with pytest.raises(NoteExists, match="Design System"):
+            vault.create(kind="doc", title="DESIGN SYSTEM")
+
+    def test_exact_duplicate_message_omits_the_case_note(self, vault):
+        vault.create(kind="task", title="Exact")
+        with pytest.raises(NoteExists) as caught:
+            vault.create(kind="task", title="Exact")
+        assert "differ only by case" not in str(caught.value)
+
+    def test_genuinely_different_titles_are_fine(self, vault):
+        vault.create(kind="task", title="Alpha")
+        vault.create(kind="task", title="Alpha two")
+
+
+class TestServiceGuards:
+    def test_unknown_kind_in_a_filter(self, vault):
+        with pytest.raises(ValidationError, match="unknown kind"):
+            vault.list(kind="epicc")
+
+    def test_a_note_cannot_be_its_own_parent(self, populated):
+        with pytest.raises(ValidationError, match="own parent"):
+            populated.update("Pick a type scale", parent="Pick a type scale")
+
+    def test_kind_cannot_be_changed(self, populated):
+        """A kind change would move the folder and invalidate the field set; delete
+        and recreate is the honest operation."""
+        with pytest.raises(ValidationError, match="cannot be changed"):
+            populated.update("Pick a type scale", kind="epic")
+
+    def test_updating_with_the_same_kind_is_a_no_op(self, populated):
+        populated.update("Pick a type scale", kind="task", priority=2)
+        assert populated.get("Pick a type scale").fields["priority"] == 2
+
+
+class TestReopen:
+    def test_clears_closed_and_done(self, populated):
+        populated.close("Pick a type scale")
+        note = populated.reopen("Pick a type scale", status="doing")
+        assert note.fields["status"] == "doing"
+        assert note.fields["done"] is False
+        assert "closed" not in note.fields
+        assert note.is_open
+
+    def test_rejects_a_status_outside_the_kind_vocabulary(self, populated):
+        with pytest.raises(ValidationError, match="not one of"):
+            populated.reopen("Pick a type scale", status="active")
+
+
+class TestDescendants:
+    def test_walks_the_whole_subtree(self, populated):
+        found = {n.title for n in populated.descendants_of("Website relaunch")}
+        assert found == {"Design system", "Pick a type scale", "Test at 320px"}
+
+    def test_direct_children_are_one_level_only(self, populated):
+        found = {n.title for n in populated.children_of("Website relaunch")}
+        assert found == {"Design system"}
+
+    def test_a_hand_edited_cycle_does_not_hang(self, populated):
+        """Nothing in Obsidian prevents two notes pointing at each other; a naive
+        walk would spin forever."""
+        a = populated.repo.root / "Items" / "Loop A.md"
+        b = populated.repo.root / "Items" / "Loop B.md"
+        a.write_text('---\nkind: task\nparent: "[[Loop B]]"\n---\n')
+        b.write_text('---\nkind: task\nparent: "[[Loop A]]"\n---\n')
+        assert {n.title for n in populated.descendants_of("Loop A")} == {"Loop A", "Loop B"} - {"Loop A"} | {"Loop B", "Loop A"} - {"Loop A"}
+
+    def test_leaf_has_no_descendants(self, populated):
+        assert populated.descendants_of("Test at 320px") == []

@@ -57,6 +57,9 @@ class MarkdownNoteRepository:
 
     # --- reading ------------------------------------------------------------------
 
+    def titles(self) -> Iterable[str]:
+        return [p.stem for p in self._paths()]
+
     def get(self, title: str) -> Note:
         path = self.find(title)
         if path is None:

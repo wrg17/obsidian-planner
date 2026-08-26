@@ -29,6 +29,13 @@ class NoteRepository(Protocol):
     def exists(self, title: str) -> bool:
         ...
 
+    def titles(self) -> Iterable[str]:
+        """Every note title, without parsing the files.
+
+        Cheap enough to call on every create, which is what the case-insensitive
+        uniqueness check needs.
+        """
+
     def iter_all(self) -> Iterable[Note]:
         """Every note that can be read. Unreadable ones are skipped."""
 

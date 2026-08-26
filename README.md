@@ -81,7 +81,7 @@ open, and so the vault can check itself, which markdown alone cannot.
 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp]"
-.venv/bin/pytest                                    # 172 tests
+.venv/bin/pytest                                    # 338 tests, 99% coverage
 .venv/bin/uvicorn planner.api:app --reload          # http://127.0.0.1:8000/docs
 .venv/bin/python -m planner.mcp                     # MCP server over stdio
 ```
@@ -96,8 +96,8 @@ api/         FastAPI: middleware, controllers, DTOs
 mcp/         MCP tools over the same service
 ```
 
-Each layer may only import downward, and `tests/test_layering.py` enforces it by parsing
-the imports — including that the domain never imports FastAPI, pydantic or `pathlib`.
+Each layer may only import downward, and `tests/architecture.integration.test.py` enforces
+it by parsing the imports — including that the domain never imports FastAPI, pydantic or `pathlib`.
 REST and MCP share one `NoteService`, so closing a ticket stamps `closed` on both; a
 second front end that reimplemented that rule would drift within a month.
 
@@ -108,6 +108,32 @@ service.create(kind="task", title="Pick a type scale", parent="Design system")
 service.close("Pick a type scale")      # status, done and closed move together
 service.problems()                      # the Triage base, as a function call
 ```
+
+### Tests and coverage
+
+Test files are named for the module they cover and mirror the source tree:
+
+```
+src/planner/domain/note.py   ->  tests/domain/note.integration.test.py
+src/planner/api/routers/notes.py ->  tests/api/routers/notes.integration.test.py
+```
+
+A dotted filename is not a legal module name, so this needs `--import-mode=importlib`
+and `python_files = ["*.test.py"]` — both set in `pyproject.toml`, so plain `pytest`
+works. `architecture.integration.test.py` is the one file not named for a module; it
+checks the layering, and also that every module *has* a test file, so a new one cannot
+slip in untested.
+
+```sh
+.venv/bin/pytest                       # runs with coverage; fails under 98%
+.venv/bin/pytest tests/domain          # one layer
+.venv/bin/pytest --no-cov -q           # quick loop
+open htmlcov/index.html                # line-by-line report
+```
+
+Coverage is branch-level and gated at 98% in `addopts`, so a drop fails the run rather
+than being noticed later. `mcp/__main__.py` is the one exclusion — running it means
+starting a real stdio server; the dispatch it calls is tested directly.
 
 ### REST
 

@@ -83,8 +83,11 @@ class NoteService:
     def create(self, note: Note | None = None, **kwargs) -> Note:
         note = note or Note.from_dict(kwargs)
         note.validate()
-        if self.repo.exists(note.title):
-            raise NoteExists(f"a note titled {note.title!r} already exists")
+        clash = self._title_clash(note.title)
+        if clash is not None:
+            raise NoteExists(
+                f"a note titled {clash!r} already exists"
+                + ("" if clash == note.title else " (titles differ only by case)"))
         self._check_parent(note)
         self._apply_defaults(note)
         return self.repo.save(note)
@@ -139,6 +142,21 @@ class NoteService:
         return self.update(title, **changes)
 
     # --- internals ----------------------------------------------------------------
+
+    def _title_clash(self, title: str) -> str | None:
+        """An existing title equal to `title` ignoring case, if any.
+
+        Case-insensitive on purpose. macOS is case-insensitive by default and Linux is
+        not, so an exact-match check would let the same call create two notes on one
+        machine and silently overwrite on another. Obsidian resolves `[[design
+        system]]` without regard to case too, so two notes differing only that way
+        could never be linked to unambiguously.
+        """
+        folded = title.casefold()
+        for existing in self.repo.titles():
+            if existing.casefold() == folded:
+                return existing
+        return None
 
     def _apply_defaults(self, note: Note) -> None:
         spec = schema.KINDS[note.kind]

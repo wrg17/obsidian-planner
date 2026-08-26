@@ -112,6 +112,9 @@ def test_repository_is_swappable():
         def exists(self, title):
             return title in self.saved
 
+        def titles(self):
+            return list(self.saved)
+
         def iter_all(self):
             return list(self.saved.values())
 
@@ -131,3 +134,32 @@ def test_repository_is_swappable():
     service.create(kind="task", title="In memory")
     assert service.get("In memory").fields["status"] == "todo"
     assert service.close("In memory").fields["done"] is True
+
+
+def test_every_source_module_has_a_matching_test_file():
+    """The naming convention, enforced.
+
+    src/planner/domain/note.py must be covered by
+    tests/domain/note.integration.test.py. A new module with no test file fails here
+    rather than quietly lowering the coverage number.
+    """
+    src = pathlib.Path(__file__).resolve().parent.parent / "src" / "planner"
+    tests = pathlib.Path(__file__).resolve().parent
+    missing = []
+    for module in sorted(src.rglob("*.py")):
+        if "__pycache__" in str(module) or module.name in ("__init__.py", "__main__.py"):
+            continue
+        rel = module.relative_to(src)
+        expected = tests / rel.parent / f"{module.stem}.integration.test.py"
+        if not expected.exists():
+            missing.append(str(rel))
+    assert not missing, f"no test file for: {missing}"
+
+
+def test_test_files_follow_the_naming_convention():
+    tests = pathlib.Path(__file__).resolve().parent
+    for path in tests.rglob("*.py"):
+        if "__pycache__" in str(path) or path.name == "conftest.py":
+            continue
+        assert path.name.endswith(".integration.test.py"), \
+            f"{path.name} does not follow <module>.integration.test.py"

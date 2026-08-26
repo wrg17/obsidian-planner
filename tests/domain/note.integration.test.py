@@ -168,3 +168,75 @@ class TestJson:
             Note.from_dict({"title": "T"})
         with pytest.raises(ValidationError):
             Note.from_dict({"kind": "task"})
+
+
+class TestEdgeCases:
+    """Paths reached only by malformed input -- which is the normal case for a vault
+    a human edits by hand."""
+
+    def test_non_string_link_passes_through(self):
+        """unwrap_link is called on whatever YAML produced; a number must not crash."""
+        from planner.domain.note import unwrap_link, wrap_link
+        assert unwrap_link(42) == 42
+        assert wrap_link(42) == 42
+        assert wrap_link("") == ""
+
+    def test_date_field_set_to_none_is_dropped_not_parsed(self):
+        assert "due" not in Note(kind="task", title="T", fields={"due": None}).fields
+
+    def test_unparseable_priority(self):
+        with pytest.raises(ValidationError, match="not a number"):
+            Note(kind="task", title="T", fields={"priority": "high"})
+
+    def test_frontmatter_that_is_not_a_mapping(self):
+        """`--- \\n- a\\n- b\\n---` parses as a list, not properties."""
+        with pytest.raises(ValidationError, match="not a mapping"):
+            Note.from_markdown("---\n- a\n- b\n---\nbody", "T")
+
+    def test_frontmatter_without_kind(self):
+        with pytest.raises(ValidationError, match="has no `kind`"):
+            Note.from_markdown("---\nstatus: todo\n---\n", "T")
+
+    def test_empty_frontmatter_block(self):
+        with pytest.raises(ValidationError, match="has no `kind`"):
+            Note.from_markdown("---\n\n---\n", "T")
+
+    def test_unclosed_frontmatter_reads_as_none(self):
+        with pytest.raises(ValidationError, match="no frontmatter"):
+            Note.from_markdown("---\nkind: task\nnever closed", "T")
+
+    def test_unknown_fields_are_emitted_after_the_known_ones(self):
+        """The demo generator writes `demo: true`, which is not in any kind's field
+        list but must survive a round trip."""
+        note = Note(kind="task", title="T", fields={"demo": True, "status": "todo"})
+        md = note.to_markdown()
+        assert "demo: true" in md
+        assert md.index("status:") < md.index("demo:")
+        assert Note.from_markdown(md, "T").fields["demo"] is True
+
+    def test_empty_title_is_rejected(self):
+        with pytest.raises(ValidationError, match="invalid title"):
+            Note(kind="task", title="")
+
+
+class TestValidationOrderMatters:
+    def test_recur_vocabulary_is_checked_on_a_kind_that_has_recur(self):
+        """Parametrising this on a task never reaches the recur check -- `recur` is
+        not a task field, so the field check rejects it first. Only a routine gets
+        far enough to exercise the vocabulary."""
+        with pytest.raises(ValidationError, match="recur 'fortnightly' not one of"):
+            Note(kind="routine", title="R", fields={"recur": "fortnightly"}).validate()
+
+    def test_valid_recur_on_a_routine_passes(self):
+        Note(kind="routine", title="R", fields={"recur": "weekdays"}).validate()
+
+    def test_as_date_helper_returns_none_for_empty(self):
+        """Not reachable through Note (empty values are dropped first), but the helper
+        is module-level and the guard is what makes that safe."""
+        from planner.domain.note import _as_date
+        assert _as_date(None, "due") is None
+        assert _as_date("", "due") is None
+
+    def test_as_date_passes_through_a_real_date(self):
+        from planner.domain.note import _as_date
+        assert _as_date(date(2026, 8, 24), "due") == date(2026, 8, 24)
