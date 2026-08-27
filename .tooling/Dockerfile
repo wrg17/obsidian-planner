@@ -43,9 +43,20 @@ ENV PATH="/opt/venv/bin:$PATH" \
 # --build-arg UID=$(id -u) there.
 ARG UID=1000
 ARG GID=1000
-RUN groupadd -g "$GID" planner \
-    && useradd -m -u "$UID" -g "$GID" planner
-USER planner
+
+# Reuse the group or user if the id is already taken rather than failing. macOS puts
+# everyone in `staff`, gid 20, which Debian has already assigned to `dialout` -- so
+# passing the host's real ids, which is the whole point of the build args, breaks the
+# build unless this checks first. groupadd exits 4 on a duplicate gid, which reads as a
+# generic failure and says nothing about why.
+RUN if ! getent group "$GID" >/dev/null; then groupadd -g "$GID" planner; fi \
+    && if ! getent passwd "$UID" >/dev/null; then \
+         useradd -M -u "$UID" -g "$GID" planner; \
+       fi
+
+# Numeric, so it works whether the account above was created or borrowed from the base
+# image -- there may be no user named `planner` to refer to.
+USER ${UID}:${GID}
 
 WORKDIR /vault
 
