@@ -69,7 +69,7 @@ services:
     environment:
       # Tells conftest to use this Postgres instead of spawning one, which it cannot do
       # in a slim image with no server binaries.
-      PLANNER_TEST_DSN: postgresql://planner:planner@db:5432/planner
+      PLANNER_TEST_DSN: postgresql://planner:planner@db:5432/planner_test
     volumes:
       # Tests need the source and the suite, so this one does mount the tree.
       - ..:/repo
