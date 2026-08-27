@@ -35,6 +35,7 @@ import datetime
 from pydantic import ConfigDict, Field, create_model
 
 from ..domain import schema as S
+from .operations import DEMO
 
 
 # --- what the domain does not know -------------------------------------------------
@@ -89,8 +90,25 @@ DESCRIPTIONS = {
 
 EXAMPLES = {
     "kind": ["task"],
-    "parent": ["Design system"],
+    "parent": [DEMO["parent"]],
+    "project": [DEMO["project"]],
     "week": ["2026-W35"],
+}
+
+#: The body Swagger pre-fills for POST /notes. A whole request rather than field-level
+#: hints, so "Try it out" then "Execute" works with nothing typed -- against a vault
+#: with the demo data loaded, which is what the demo is for.
+#:
+#: The title is one the demo deliberately does not create. An example that already
+#: existed would 409 on the first click, which teaches the wrong lesson about the
+#: endpoint.
+CREATE_EXAMPLE = {
+    "kind": "task",
+    "title": DEMO["new_title"],
+    "parent": DEMO["parent"],
+    "project": DEMO["project"],
+    "type": "chore",
+    "priority": 2,
 }
 
 #: Properties the API owns and a caller may never set. `icon` and `iconColor` are
@@ -122,7 +140,8 @@ OPTIONAL_FIELDS = {
 
 NoteIn = create_model(
     "NoteIn",
-    __config__=ConfigDict(extra="forbid", use_enum_values=True),
+    __config__=ConfigDict(extra="forbid", use_enum_values=True,
+                          json_schema_extra={"examples": [CREATE_EXAMPLE]}),
     __doc__="A note to create. Which fields are legal depends on `kind`; sending one "
             "that does not belong is a 422, and GET /schema publishes the rules.",
     kind=(S.KindEnum, Field(..., description=DESCRIPTIONS["kind"],
@@ -130,7 +149,7 @@ NoteIn = create_model(
     title=(str, Field(..., min_length=1,
                       description="Unique vault-wide. Obsidian resolves links by name, "
                                   "so a doc and a task may not share one.",
-                      examples=["Pick a type scale"])),
+                      examples=[DEMO["new_title"]])),
     body=(str, Field("", description="Markdown after the frontmatter.")),
     **OPTIONAL_FIELDS,
 )

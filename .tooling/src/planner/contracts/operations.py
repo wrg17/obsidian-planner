@@ -23,7 +23,27 @@ number, so a local rule can be traced to the principle behind it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+
+#: Values that make "Try it out" work on a vault with the demo data loaded. A parameter
+#: with no example is a form a reader has to fill in before they can learn anything, and
+#: filling it in requires knowing a note title they have not been told.
+#:
+#: These name real demo notes, so a test checks them against what demo.py generates --
+#: examples that quietly stopped resolving would be worse than none, because a reader
+#: would blame themselves for the 404.
+DEMO = {
+    "task": "Pick a type scale",          # open, and has subtasks, so /children works
+    "leaf": "Compare worktop quotes",     # no children -- DELETE demonstrates the
+                                          # endpoint rather than its guard rail, which
+                                          # is what a note with children would show
+    "parent": "Design system",            # an epic with four children
+    "project": "Website relaunch",
+    "area": "Studio",
+    "doc": "Worktop options",
+    "new_title": "Write release notes",   # deliberately absent, so POST succeeds
+}
 
 
 @dataclass(frozen=True)
@@ -31,6 +51,7 @@ class Operation:
     summary: str
     guidance: str
     invariants: str = ""
+    examples: dict = field(default_factory=dict)
 
     @property
     def description(self) -> str:
@@ -43,6 +64,7 @@ class Operation:
 #: Keyed by (method, path), matching the routing table.
 OPERATIONS: dict[tuple[str, str], Operation] = {
     ("GET", "/notes"): Operation(
+        examples={"kind": "task", "project": DEMO["project"], "parent": DEMO["parent"]},
         summary='List notes',
         guidance='List notes, optionally filtered. Returns title, kind and every field for each. Use `open` to exclude done and cancelled work.',
         invariants="""INVARIANTS
@@ -109,6 +131,7 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
       atomic rename. (Documented limit of the unit of work.)""",
     ),
     ("GET", "/notes/{title}"): Operation(
+        examples={"title": DEMO["task"]},
         summary='Fetch one note',
         guidance='Fetch one note by title. Matching ignores case, as it does everywhere else.',
         invariants="""INVARIANTS
@@ -123,6 +146,7 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
       the note. (S9)""",
     ),
     ("PATCH", "/notes/{title}"): Operation(
+        examples={"title": DEMO["task"]},
         summary='Update a note',
         guidance='Change fields on an existing note. A field sent as null is removed; a field left out is untouched. `kind` cannot be changed.',
         invariants="""INVARIANTS
@@ -143,6 +167,7 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
       POST would have required. (S1)""",
     ),
     ("DELETE", "/notes/{title}"): Operation(
+        examples={"title": DEMO["task"]},
         summary='Delete a note',
         guidance='Delete a note permanently. A note with children is refused unless you pass `cascade`.',
         invariants="""INVARIANTS
@@ -164,6 +189,7 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
       not name would be worse than a dangling reference that /problems reports.""",
     ),
     ("GET", "/notes/{title}/children"): Operation(
+        examples={"title": DEMO["parent"]},
         summary='Direct children',
         guidance='The notes hanging off this one. Use `recursive` for the whole subtree. This is the query the Obsidian side cannot answer -- Bases has no joins and no recursion -- so it is worth reaching for rather than following `parent` one note at a time.',
         invariants="""INVARIANTS
@@ -181,6 +207,7 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
       the walk is real.""",
     ),
     ("POST", "/notes/{title}/close"): Operation(
+        examples={"title": DEMO["task"]},
         summary='Close a ticket',
         guidance='Close a ticket. Sets the status, ticks `done` and stamps `closed` in one step; all three must move together. Only tickets track completion -- a doc cannot be closed.',
         invariants="""INVARIANTS
@@ -201,6 +228,7 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
   X7. Reversible. reopen restores an open state, so this is not a trapdoor.""",
     ),
     ("POST", "/notes/{title}/reopen"): Operation(
+        examples={"title": DEMO["task"]},
         summary='Reopen a ticket',
         guidance='Reopen a closed ticket: clears `closed`, unticks `done`, and puts it back in the status you give. The inverse of close, though not a full undo -- the original closing date is gone.',
         invariants="""INVARIANTS

@@ -235,6 +235,14 @@ starting a real stdio server; the dispatch it calls is tested directly.
 
 Swagger UI at `/docs`, OpenAPI at `/openapi.json`.
 
+**Every parameter is pre-filled with a note the demo data contains**, so *Try it out* →
+*Execute* returns something without your having to know a title first. `POST /notes`
+carries a whole request body, using a title the demo deliberately does not create so the
+first click succeeds rather than 409ing. `DELETE` points at a childless note, so it
+demonstrates the endpoint rather than its refuse-to-orphan guard. A test checks each
+example against what `demo.py` generates — one that quietly stopped resolving would be
+worse than none, since a reader would blame themselves for the 404.
+
 <!-- generated:endpoints -->
 | | |
 |---|---|

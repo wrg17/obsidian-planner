@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import datetime
 
-from fastapi import Depends, Query, Response
+from fastapi import Depends, Path, Query, Response
 
 from ...domain import schema as S
+from ...contracts.operations import DEMO
 from ...domain.note import Note
 from ...service.notes import NoteService
 from ..dependencies import get_service
@@ -25,8 +26,10 @@ from ..schemas import NoteIn, NoteOut, NotePatch
 
 def list_notes(
     kind: S.KindEnum | None = Query(None, description="Restrict to one kind."),
-    project: str | None = Query(None, description="Plain title."),
-    parent: str | None = Query(None, description="Direct children of this note."),
+    project: str | None = Query(None, description="Plain title.",
+                                examples=[DEMO["project"]]),
+    parent: str | None = Query(None, description="Direct children of this note.",
+                               examples=[DEMO["parent"]]),
     status: S.StatusEnum | None = None,
     open_only: bool = Query(False, alias="open", description="Exclude closed work."),
     service: NoteService = Depends(get_service),
@@ -109,7 +112,8 @@ def create_many(payload: list[NoteIn], service: NoteService = Depends(get_servic
     return [n.to_dict() for n in service.create_many(notes)]
 
 
-def get_note(title: str, service: NoteService = Depends(get_service)):
+def get_note(title: str = Path(..., examples=[DEMO["task"]]),
+             service: NoteService = Depends(get_service)):
     """Fetch one note by title.
 
     INVARIANTS
@@ -126,7 +130,8 @@ def get_note(title: str, service: NoteService = Depends(get_service)):
     return service.get(title).to_dict()
 
 
-def update_note(title: str, payload: NotePatch,
+def update_note(payload: NotePatch,
+                title: str = Path(..., examples=[DEMO["task"]]),
                 service: NoteService = Depends(get_service)):
     """Partially update a note.
 
@@ -153,7 +158,7 @@ def update_note(title: str, payload: NotePatch,
 
 
 def delete_note(
-    title: str,
+    title: str = Path(..., examples=[DEMO["leaf"]]),
     cascade: bool = Query(False, description=
                           "Also delete every descendant. Without it, a note with "
                           "children is refused."),
@@ -184,7 +189,7 @@ def delete_note(
 
 
 def get_children(
-    title: str,
+    title: str = Path(..., examples=[DEMO["parent"]]),
     recursive: bool = Query(False, description="Whole subtree instead of one level."),
     service: NoteService = Depends(get_service),
 ):
@@ -210,7 +215,7 @@ def get_children(
 
 
 def close_note(
-    title: str,
+    title: str = Path(..., examples=[DEMO["task"]]),
     status: S.ClosingStatusEnum = Query(S.ClosingStatusEnum.DONE),
     on: datetime.date | None = Query(None, description="Defaults to today."),
     service: NoteService = Depends(get_service),
@@ -237,7 +242,8 @@ def close_note(
     return service.close(title, status=status, on=on).to_dict()
 
 
-def reopen_note(title: str, status: S.StatusEnum = Query(S.StatusEnum.TODO),
+def reopen_note(title: str = Path(..., examples=[DEMO["task"]]),
+                status: S.StatusEnum = Query(S.StatusEnum.TODO),
                 service: NoteService = Depends(get_service)):
     """Reopen a closed ticket.
 
