@@ -84,11 +84,69 @@ The vault is plain markdown and works with no Python at all. Alongside it, `src/
 models the same rules as code — so notes can be created and validated without Obsidian
 open, and so the vault can check itself, which markdown alone cannot.
 
+Everything runs from a `Makefile` in `.tooling/`. Python has no `package.json`
+equivalent — `[project.scripts]` declares installed console entry points rather than
+tasks, and `tox`/`nox` solve version matrices rather than everyday commands — so a
+Makefile is what most Python projects settle on. Run `make` on its own for the list.
+
+**Docker is the only dependency.** Postgres is a compose service, never something to
+install and remember to start: `make db` brings it up, and every target that needs it
+depends on that.
+
 ```sh
+cd .tooling
+make install     # venv and all extras
+make test        # starts the db, runs the suite with coverage
+make run         # starts the db, serves the API on the host with --reload
+make up          # or: API in a container too
+```
+
+### Containers
+
+`docker-compose.yml` runs the API and its audit database.
+
+```sh
+make up          # start;  http://127.0.0.1:8000/docs
+make logs        # follow the API
+make audit       # recent operations from the audit log
+make test-docker # run the suite in a container against the compose Postgres
+make down        # stop, keeping the database
+make clean       # stop and delete the audit volume (the vault is untouched)
+```
+
+The vault is **bind-mounted, never copied**. It is a directory Obsidian edits
+continuously on the host, and a copy would be a second source of truth that diverges the
+moment either side writes — so the container becomes one more writer alongside Obsidian,
+which is the position the local process is in too, and why the journal's conflict
+handling exists.
+
+Only the five note folders are mounted, not the repository root: the API reads nothing
+else, and mounting `..` would hand the container the source tree, `.git`, and a 178 MB
+virtualenv for no reason.
+
+The suite gets its own database, `planner_test`, beside `planner` —
+`pytest-postgresql` creates and drops whatever database it is handed, so pointing it at
+the real one would delete the audit history on every run.
+
+Postgres is published on `127.0.0.1:55433` rather than 5432, which is usually a local
+server, or 5433, which is often an ssh tunnel. The API keeps 8000, so `make up` and
+`make run` cannot both hold it — deliberately.
+
+**If `make up` seems to hang, look for a container stuck in `Created`.** A `compose up`
+that is interrupted part-way can leave one holding the vault mount, and every later mount
+of an overlapping path hangs too. That looks convincingly like a file-sharing or iCloud
+problem and is not one — `docker rm -f` the stuck container and try again. Any runtime
+works; on Colima, `colima ssh -- ls /path/to/vault` confirms the VM can see it, and a
+vault anywhere under `$HOME` needs no extra mount configuration.
+
+### Doing it by hand
+
+```sh
+cd .tooling
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev,api,mcp,postgres]"
-.venv/bin/pytest                                    # the suite; fails under 98% coverage
-.venv/bin/uvicorn planner.api:app --reload          # http://127.0.0.1:8000/docs
-.venv/bin/python -m planner.mcp                     # MCP server over stdio
+PLANNER_VAULT=.. .venv/bin/pytest                   # the suite; fails under 98% coverage
+PLANNER_VAULT=.. .venv/bin/uvicorn planner.api:app  # http://127.0.0.1:8000/docs
+PLANNER_VAULT=.. .venv/bin/python -m planner.mcp    # MCP server over stdio
 ```
 
 ### Layers
