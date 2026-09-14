@@ -65,8 +65,21 @@ fmt: install  ## Format, and apply every safe lint fix
 	$(VENV)/bin/ruff format src tests demo
 	$(VENV)/bin/ruff check --fix src tests demo
 
+.PHONY: types
+types: install  ## Type-check (advisory: 27 known errors not yet cleared)
+	-$(VENV)/bin/mypy src/planner --ignore-missing-imports
+
+.PHONY: vault-check
+vault-check: install  ## Fail if any committed note would be rejected by the API
+	$(PY) scripts/check_vault.py $(VAULT)
+
+.PHONY: hooks
+hooks: install  ## Install the pre-commit hooks
+	cd .. && $(CURDIR)/$(VENV)/bin/pre-commit install
+	@echo "hooks installed; they run on every commit"
+
 .PHONY: check
-check: lint test docs-check  ## Everything CI would run
+check: lint test docs-check vault-check  ## Everything CI would run
 
 .PHONY: test
 test: install db  ## Run the suite with coverage (fails under 98%)

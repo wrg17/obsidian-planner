@@ -79,3 +79,6 @@ htmlcov/
 /Docs/Worktop options.md
 /Docs/Use system fonts.md
 /Meetings/Website kickoff.md
+
+# Claude Code worktrees — other agents work in here; never commit their checkouts
+.claude/worktrees/
