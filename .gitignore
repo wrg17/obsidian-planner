@@ -44,6 +44,11 @@ htmlcov/
 # Obsidian's own trash
 .trash/
 
+# Editors. Machine-local project state -- JetBrains writes .idea/ the moment the
+# repository is opened, and VS Code's .vscode/ is per-machine for the same reason.
+.idea/
+.vscode/
+
 # macOS
 .DS_Store
 
