@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import date
+from importlib.metadata import version
 from pathlib import Path
 
 from ..contracts.note import note_properties
@@ -334,24 +335,52 @@ def _dispatch(name, args, service):
 # --- stdio server -------------------------------------------------------------------
 
 
-async def serve():  # pragma: no cover - requires a live MCP client
-    """Run over stdio. Imported lazily so the SDK stays an optional dependency."""
+async def serve():  # pragma: no cover - measured out of process; see the test below
+    """Run over stdio. Imported lazily so the SDK stays an optional dependency.
+
+    Handlers are passed to the constructor rather than registered with `@server.*`
+    decorators. The decorators are the 1.x SDK's API and were removed in 2.0 -- against
+    which this raised `AttributeError` on the first line of the body, so the server
+    exited before a client could complete the handshake and every client reported it as
+    "connection closed" rather than as a version mismatch. `mcp>=2` in pyproject is half
+    the fix; this is the other half.
+
+    Everything above this line is transport-agnostic and directly tested. This function
+    is the part that can only be exercised by starting the process, which is what
+    `tests/mcp/serve.integration.test.py` does -- nothing did before, which is why the
+    break shipped. It stays `no cover` because that test runs the server as a
+    subprocess, where this process's coverage cannot see it.
+    """
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
 
     from mcp import types
 
-    server = Server("planner")
     service = build_service()
 
-    @server.list_tools()
-    async def _list_tools():
-        return [types.Tool(**t) for t in TOOLS]
+    async def list_tools(_context, _params):
+        return types.ListToolsResult(tools=[types.Tool(**t) for t in TOOLS])
 
-    @server.call_tool()
-    async def _call_tool(name, arguments):
-        payload = call_tool(name, arguments, service)
-        return [types.TextContent(type="text", text=json.dumps(payload, indent=2))]
+    async def invoke(_context, params):
+        payload = call_tool(params.name, params.arguments, service)
+        return types.CallToolResult(
+            content=[
+                types.TextContent(type="text", text=json.dumps(payload, indent=2))
+            ],
+            # A failed tool call is a result, not a protocol error: the payload says
+            # what went wrong and the model reads it and corrects itself. `is_error`
+            # is how a client knows to show it as a failure rather than as an answer.
+            is_error=not payload["ok"],
+        )
+
+    # Read from the installed metadata rather than written here: the number lives in
+    # pyproject, and a copy of it in the source is a copy that goes stale.
+    server = Server(
+        "planner",
+        version=version("planner"),
+        on_list_tools=list_tools,
+        on_call_tool=invoke,
+    )
 
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())
