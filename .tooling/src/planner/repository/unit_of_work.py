@@ -5,13 +5,17 @@
         repo.delete(b)          # if this raises, `a` is restored too
 
 Commands are executed as they arrive and recorded; on failure they are undone in
-reverse. That is compensation, not a real transaction -- there is no filesystem
-equivalent of a write-ahead log we could rely on here, and the vault is being read by
-another process throughout. What it does guarantee is that a failure part-way through a
-multi-note operation does not leave the vault in a state the API would refuse to
-create, which is the property that actually matters (S1).
+reverse. That is compensation rather than a transaction in the database sense -- the
+filesystem cannot participate in one, and the vault is being read by another process
+throughout. What it guarantees is that a failure part-way through a multi-note operation
+does not leave the vault in a state the API would refuse to create, which is the
+property that actually matters (S1).
 
-Two limits, stated rather than hidden:
+Given a journal it is also durable across a crash; see journal.py, which is the
+write-ahead log this module compensates with when the process survives and recovers
+from when it does not.
+
+One limit and one caveat, stated rather than hidden:
 
   NOT ISOLATED   Obsidian sees each write as it lands, including ones later rolled
                  back. Nothing short of a lock file would change that, and locking a

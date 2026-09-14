@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Load or clear a throwaway demo dataset.
 
-    python3 demo/demo.py load     # write ~22 notes into Items/, Docs/, ...
+    python3 demo/demo.py load     # write 25 notes into Items/, Docs/, ...
     python3 demo/demo.py clear    # delete exactly those files again
 
 The point is that empty views are indistinguishable from broken ones. This fills
@@ -20,9 +20,9 @@ from datetime import date, timedelta
 from pathlib import Path
 
 #: The vault is the repository root; this script lives two levels down in
-#: tooling/demo/. Written as parents[2] with the layout spelled out because a chain of
+#: .tooling/demo/. Written as parents[2] with the layout spelled out because a chain of
 #: `.parent.parent` silently pointed at the wrong directory the moment the code moved
-#: into tooling/, and nothing failed until notes appeared in the wrong place.
+#: into .tooling/, and nothing failed until notes appeared in the wrong place.
 #:
 #:     <repo root>/          the Obsidian vault
 #:       .tooling/           everything that is not notes, dot-prefixed so Obsidian

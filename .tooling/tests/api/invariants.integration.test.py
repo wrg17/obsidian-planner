@@ -98,21 +98,24 @@ class TestTheyReachTheClient:
 
 
 class TestEndpointsReferToThem:
-    def test_handler_docstrings_cite_system_invariants(self):
-        """Per-endpoint rules are meant to be instances of these, not a parallel set."""
-        import inspect
+    def test_operations_cite_system_invariants(self):
+        """Per-endpoint rules are meant to be instances of these, not a parallel set.
 
-        from planner.api.handlers import notes
+        Checked against contracts/operations.py, which is where the invariants live --
+        the handler docstrings used to carry a byte-identical second copy, and testing
+        that copy would have kept it alive.
+        """
+        from planner.contracts.operations import OPERATIONS
 
-        source = inspect.getsource(notes)
-        cited = set(re.findall(r"\(S\d(?:, S\d)*\)", source))
-        assert cited, "no handler traces a rule back to a system invariant"
+        cited = set()
+        for operation in OPERATIONS.values():
+            cited |= set(re.findall(r"\(S\d(?:, S\d)*\)", operation.invariants))
+        assert cited, "no operation traces a rule back to a system invariant"
 
     def test_every_cited_id_exists(self):
-        import inspect
+        from planner.contracts.operations import OPERATIONS
 
-        from planner.api.handlers import meta, notes
-
-        for module in (notes, meta):
-            for match in re.findall(r"\bS(\d)\b", inspect.getsource(module)):
-                assert f"S{match}" in BY_ID, f"cites S{match}, which is not defined"
+        for key, operation in OPERATIONS.items():
+            for match in re.findall(r"\bS(\d)\b", operation.invariants):
+                assert f"S{match}" in BY_ID, \
+                    f"{key} cites S{match}, which is not defined"

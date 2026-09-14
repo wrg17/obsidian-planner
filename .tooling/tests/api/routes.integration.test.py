@@ -46,10 +46,22 @@ class TestMetadata:
         assert set(route.tags) <= {"notes", "hierarchy", "tickets", "meta"}
 
     @pytest.mark.parametrize("route", ROUTES, ids=lambda r: f"{r.method} {r.path}")
-    def test_the_handler_documents_its_invariants(self, route):
-        """The docstring is the contract and becomes the OpenAPI description; a
-        handler without one has rules that live only in its implementation."""
-        assert "INVARIANT" in (route.handler.__doc__ or "").upper()
+    def test_the_operation_documents_its_invariants(self, route):
+        """The contract becomes the OpenAPI description, so an operation without one
+        has rules that live only in its implementation.
+
+        Asserted on `route.docs`, not on the handler docstring. The handler used to
+        carry a second copy, and this test passed on it -- which is exactly how a
+        duplicate survives: something keeps checking it.
+        """
+        assert "INVARIANTS" in route.docs.invariants.upper()
+
+    @pytest.mark.parametrize("route", ROUTES, ids=lambda r: f"{r.method} {r.path}")
+    def test_the_handler_points_at_the_contract(self, route):
+        """A developer who opens the handler should be told where the rules are rather
+        than left to discover that the docstring is only half the story."""
+        doc = route.handler.__doc__ or ""
+        assert "contracts/operations.py" in doc
 
     def test_writes_declare_their_validation_failure(self, client):
         paths = client.get("/openapi.json").json()["paths"]
@@ -92,3 +104,30 @@ class TestHandlersAreDecoupled:
     def test_building_twice_gives_independent_routers(self):
         """create_app() is called per test; a shared mutable router would accumulate."""
         assert len(build_router().routes) == len(build_router().routes) == len(ROUTES)
+
+
+class TestTheDocsAreNotDuplicated:
+    """The invariants were extracted into contracts/operations.py and the handler
+    docstrings kept a byte-identical copy for several commits. Nothing read it, and it
+    had not drifted yet -- but two copies of twelve paragraphs is a drift waiting for
+    the first person who edits the one they happened to open."""
+
+    @pytest.mark.parametrize("route", ROUTES, ids=lambda r: f"{r.method} {r.path}")
+    def test_the_handler_does_not_restate_the_invariants(self, route):
+        doc = route.handler.__doc__ or ""
+        assert "INVARIANTS\n" not in doc, (
+            f"{route.method} {route.path}: the invariants belong in "
+            "contracts/operations.py, which is what both transports publish")
+
+    @pytest.mark.parametrize("route", ROUTES, ids=lambda r: f"{r.method} {r.path}")
+    def test_the_handler_docstring_stays_short(self, route):
+        """A pointer, not a second contract. The threshold is arbitrary; exceeding it
+        means prose is accumulating somewhere nothing reads."""
+        assert len(route.handler.__doc__ or "") < 500
+
+    def test_the_published_text_comes_from_contracts_alone(self):
+        """What a reader or a model sees is assembled from one place."""
+        from planner.contracts.operations import OPERATIONS
+
+        for route in ROUTES:
+            assert route.description == OPERATIONS[(route.method, route.path)].description
