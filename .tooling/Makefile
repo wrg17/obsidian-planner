@@ -55,6 +55,19 @@ install: $(VENV)/pyvenv.cfg  ## Create the venv and install everything
 	$(PIP) install -q -e ".[dev,api,mcp,postgres,docs]"
 	@echo "installed"
 
+.PHONY: lint
+lint: install  ## Check formatting and lint rules, changing nothing
+	$(VENV)/bin/ruff format --check src tests demo
+	$(VENV)/bin/ruff check src tests demo
+
+.PHONY: fmt
+fmt: install  ## Format, and apply every safe lint fix
+	$(VENV)/bin/ruff format src tests demo
+	$(VENV)/bin/ruff check --fix src tests demo
+
+.PHONY: check
+check: lint test docs-check  ## Everything CI would run
+
 .PHONY: test
 test: install db  ## Run the suite with coverage (fails under 98%)
 	PLANNER_TEST_DSN=$(TEST_DSN) $(PYTEST)

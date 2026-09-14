@@ -35,16 +35,20 @@ Kind = Literal["guarantee", "detection"]
 
 @dataclass(frozen=True)
 class Invariant:
+    """One system-wide property, in both the short and the long form."""
+
     id: str
     name: str
     kind: Kind
-    summary: str        # one line; what a client needs
-    rationale: str      # why, and what it cost to hold
+    summary: str  # one line; what a client needs
+    rationale: str  # why, and what it cost to hold
 
 
 INVARIANTS: tuple[Invariant, ...] = (
     Invariant(
-        "S1", "CLOSURE", "guarantee",
+        "S1",
+        "CLOSURE",
+        "guarantee",
         "No operation produces a state another would refuse. Structural links "
         "(`parent`, `project`, `area`) are protected on both sides; reference links "
         "(`blocked_by`, `supersedes`) on write only — deleting a blocker may leave a "
@@ -66,54 +70,68 @@ Links come in two kinds and are protected differently:
                would make the vault immovable, and silently editing notes the caller
                never named would be a surprise write. So a delete CAN leave a dangling
                reference, and GET /problems reports it. This is the sole exception, and
-               it is a deliberate trade rather than an oversight."""),
-
+               it is a deliberate trade rather than an oversight.""",
+    ),
     Invariant(
-        "S2", "PURITY OF READS", "guarantee",
+        "S2",
+        "PURITY OF READS",
+        "guarantee",
         "`GET` never writes, and never touches mtime.",
         """GET never changes the vault. No lazy migration, no touching mtimes -- mtime
 is load-bearing here, because Triage's "stale" view reads it and Iconize repaints on
-it."""),
-
+it.""",
+    ),
     Invariant(
-        "S3", "ATOMICITY", "guarantee",
+        "S3",
+        "ATOMICITY",
+        "guarantee",
         "A rejected write leaves the vault byte-identical.",
         """A rejected write leaves the vault byte-identical. Validation completes before
 the first byte is written; there is no partially-applied note. Multi-note operations run
-inside a unit of work, so a failure part-way restores what it had already changed."""),
-
+inside a unit of work, so a failure part-way restores what it had already changed.""",
+    ),
     Invariant(
-        "S4", "ONE ERROR SHAPE", "guarantee",
+        "S4",
+        "ONE ERROR SHAPE",
+        "guarantee",
         "Every deliberate 4xx is `{detail, field}`.",
         """Every deliberate 4xx is {"detail": str, "field": str | null}. Both validation
 layers -- the DTO enums and the domain -- normalise to it, because which of the two
-fired is an implementation detail no client should have to model."""),
-
+fired is an implementation detail no client should have to model.""",
+    ),
     Invariant(
-        "S5", "STORAGE IS NOT THE CONTRACT", "guarantee",
+        "S5",
+        "STORAGE IS NOT THE CONTRACT",
+        "guarantee",
         "No wikilinks, folders or icon names cross the wire.",
         """Wikilink syntax, folder placement and icon names never cross the wire. Links
 are plain titles in and out; `kind` decides the folder; `icon`/`iconColor` are derived
-and are not echoed, so a client cannot send one that disagrees."""),
-
+and are not echoed, so a client cannot send one that disagrees.""",
+    ),
     Invariant(
-        "S6", "DECLARED IDEMPOTENCE", "guarantee",
+        "S6",
+        "DECLARED IDEMPOTENCE",
+        "guarantee",
         "`PATCH`, close and reopen are idempotent; `POST` is not; `DELETE` "
         "deliberately 404s on the second call.",
         """An operation documented as idempotent is idempotent. PATCH, close and reopen
 are. POST is not, and says so. DELETE is deliberately NOT idempotent: the second call
 404s, matching GET and PATCH on a missing note, so "did that exist?" has one answer
-across the API rather than a special case."""),
-
+across the API rather than a special case.""",
+    ),
     Invariant(
-        "S7", "TRANSPORT PARITY", "guarantee",
+        "S7",
+        "TRANSPORT PARITY",
+        "guarantee",
         "REST and MCP share one service; neither holds rules of its own.",
         """REST and MCP call the same NoteService. A rule enforced on one is enforced on
 the other; neither holds business logic of its own. The wire shapes they publish come
-from one `contracts` module, so the two cannot offer different fields."""),
-
+from one `contracts` module, so the two cannot offer different fields.""",
+    ),
     Invariant(
-        "S8", "TRIAGE COMPLETENESS", "detection",
+        "S8",
+        "TRIAGE COMPLETENESS",
+        "detection",
         "`/problems` reports every state the API would refuse. `/notes` and "
         "`/problems` overlap; their union is the whole vault.",
         """GET /problems reports every state the API would refuse to create -- bad
@@ -125,13 +143,16 @@ reference-link exception above.
 Note that /notes and /problems OVERLAP rather than partition. A note that parses but
 fails validation appears in both, deliberately: excluding it from /notes would leave it
 repairable only by hand in Obsidian. Their union is every note on disk -- that is the
-property worth having, not disjointness."""),
-
+property worth having, not disjointness.""",
+    ),
     Invariant(
-        "S9", "ROUND-TRIP FIDELITY", "guarantee",
+        "S9",
+        "ROUND-TRIP FIDELITY",
+        "guarantee",
         "What `POST` returns is what `GET` returns.",
         """What POST returns is what a subsequent GET returns. Writing a note and
-reading it back is lossless, including the markdown body."""),
+reading it back is lossless, including the markdown body.""",
+    ),
 )
 
 BY_ID = {invariant.id: invariant for invariant in INVARIANTS}
@@ -153,5 +174,6 @@ def as_markdown_table() -> str:
     which is why the summaries are published rather than merely written down.
     """
     rows = "\n".join(
-        f"| **{i.id}** | {i.name} | {i.kind} | {i.summary} |" for i in INVARIANTS)
+        f"| **{i.id}** | {i.name} | {i.kind} | {i.summary} |" for i in INVARIANTS
+    )
     return "| | | | |\n|---|---|---|---|\n" + rows

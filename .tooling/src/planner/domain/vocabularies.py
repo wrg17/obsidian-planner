@@ -1,5 +1,4 @@
-"""The value sets a note's properties are checked against, and the enums generated
-from them.
+"""The value sets a note's properties are checked against.
 
 Kept apart from the kinds that use them because these are the things most likely to be
 read by something other than this package -- the API publishes them at /schema, the MCP
@@ -44,11 +43,12 @@ RecurEnum = StrEnum("RecurEnum", {v.upper(): v for v in RECUR})
 
 #: Every status any kind may take. Which subset applies depends on the kind, and that
 #: is enforced in the domain -- but declaring the union still beats a bare string.
-ALL_STATUS = tuple(dict.fromkeys(
-    TICKET_STATUS + CONTAINER_STATUS + ROUTINE_STATUS + DOC_STATUS + DECISION_STATUS))
+ALL_STATUS = tuple(
+    dict.fromkeys(
+        TICKET_STATUS + CONTAINER_STATUS + ROUTINE_STATUS + DOC_STATUS + DECISION_STATUS
+    )
+)
 StatusEnum = StrEnum("StatusEnum", {v.upper().replace("-", "_"): v for v in ALL_STATUS})
 
 #: Statuses that close a ticket, as an enum for the close endpoint.
 ClosingStatusEnum = StrEnum("ClosingStatusEnum", {v.upper(): v for v in CLOSED_STATUS})
-
-

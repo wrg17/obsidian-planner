@@ -31,7 +31,7 @@ class CommandError(RuntimeError):
     """A command failed to execute or to undo."""
 
 
-class ConcurrentModification(CommandError):
+class ConcurrentModificationError(CommandError):
     """Undo declined: the file no longer holds what this command wrote.
 
     Distinct from a failure, because nothing went wrong -- the command chose not to
@@ -45,7 +45,8 @@ class ConcurrentModification(CommandError):
         self.path = path
         super().__init__(
             f"{describe}: not undone -- {path.name} was modified by something else "
-            f"since we wrote it, and its current content was left in place")
+            f"since we wrote it, and its current content was left in place"
+        )
 
 
 @runtime_checkable
@@ -64,8 +65,10 @@ class Command(Protocol):
         """Make the change. Only valid after `prepare`."""
 
     def journal_entry(self, root):
-        """A record sufficient to undo this without the command object, or None if the
-        command needs no journalling."""
+        """A record sufficient to undo this without the command object.
+
+        None when the command needs no journalling.
+        """
 
     def execute(self) -> None:
         """Prepare and apply in one step."""
@@ -97,11 +100,13 @@ class _Base:
             raise CommandError(f"{self.describe()} has already run")
 
     def prepare(self) -> None:
+        """Capture what undo will need. Changes nothing."""
         self._guard_execute()
         self._capture()
         self._prepared = True
 
     def execute(self) -> None:
+        """Prepare and apply in one step."""
         self.prepare()
         self.apply()
 
@@ -112,15 +117,17 @@ class _Base:
         is gone, so the journal has to be self-sufficient.
         """
         from .journal import Entry, digest
+
         return Entry(
             path=str(self.path.relative_to(root)),
             prior_hash=digest(self._previous),
             intended_hash=self._intended_hash(),
-            prior_content=None if self._previous is None
+            prior_content=None
+            if self._previous is None
             else self._previous.decode("utf-8", errors="surrogateescape"),
         )
 
-    def _intended_hash(self) -> str | None:      # pragma: no cover - overridden
+    def _intended_hash(self) -> str | None:  # pragma: no cover - overridden
         raise NotImplementedError
 
     def _restore(self) -> None:
@@ -131,6 +138,7 @@ class _Base:
 
     def _current_hash(self) -> str | None:
         from .journal import digest
+
         return digest(self.path.read_bytes() if self.path.is_file() else None)
 
     def undo(self) -> None:
@@ -146,13 +154,14 @@ class _Base:
         writes continuously.
         """
         if not self._executed:
-            return                      # never ran; nothing to reverse
+            return  # never ran; nothing to reverse
         if self._current_hash() != self._intended_hash():
-            raise ConcurrentModification(self.path, self.describe())
+            raise ConcurrentModificationError(self.path, self.describe())
         self._restore()
         self._executed = False
 
-    def describe(self) -> str:          # pragma: no cover - overridden
+    def describe(self) -> str:  # pragma: no cover - overridden
+        """A short label, used in rollback errors and logs."""
         return f"{type(self).__name__}({self.path})"
 
 
@@ -165,7 +174,9 @@ def _atomic_write(path: Path, data: bytes) -> None:
     name pointing at an empty file, which is worse than the old content.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    handle, temporary = tempfile.mkstemp(dir=path.parent, prefix=".planner-", suffix=".tmp")
+    handle, temporary = tempfile.mkstemp(
+        dir=path.parent, prefix=".planner-", suffix=".tmp"
+    )
     try:
         with os.fdopen(handle, "wb") as stream:
             stream.write(data)
@@ -178,14 +189,17 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 
 class WriteFile(_Base):
-    """Create or overwrite a file. Undo restores the previous content, or removes the
-    file if it did not exist before."""
+    """Create or overwrite a file.
+
+    Undo restores the previous content, or removes the file if it did not exist before.
+    """
 
     def __init__(self, path: Path, content: str):
         super().__init__(path)
         self.content = content
 
     def apply(self) -> None:
+        """Make the change. Only valid after prepare."""
         if not self._prepared:
             raise CommandError(f"{self.describe()} was not prepared")
         _atomic_write(self.path, self.content.encode("utf-8"))
@@ -193,9 +207,11 @@ class WriteFile(_Base):
 
     def _intended_hash(self) -> str | None:
         from .journal import digest
+
         return digest(self.content.encode("utf-8"))
 
     def describe(self) -> str:
+        """A short label, used in rollback errors and logs."""
         verb = "overwrite" if self.path.is_file() else "create"
         return f"{verb} {self.path.name}"
 
@@ -204,6 +220,7 @@ class DeleteFile(_Base):
     """Remove a file. Undo puts the bytes back."""
 
     def prepare(self) -> None:
+        """Capture what undo will need. Changes nothing."""
         self._guard_execute()
         if not self.path.is_file():
             raise CommandError(f"cannot delete missing file {self.path}")
@@ -211,54 +228,66 @@ class DeleteFile(_Base):
         self._prepared = True
 
     def apply(self) -> None:
+        """Make the change. Only valid after prepare."""
         if not self._prepared:
             raise CommandError(f"{self.describe()} was not prepared")
         self.path.unlink()
         self._executed = True
 
     def _intended_hash(self) -> str | None:
-        return None                     # the file is meant to be gone
+        return None  # the file is meant to be gone
 
     def describe(self) -> str:
+        """A short label, used in rollback errors and logs."""
         return f"delete {self.path.name}"
 
 
 class CreateDirectory:
-    """Ensure a directory exists. Undo removes it only if this command created it, and
-    only if it is still empty -- a directory someone else has since used is not ours to
-    remove."""
+    """Ensure a directory exists.
+
+    Undo removes it only if this command created it, and only if it is still empty -- a
+    directory someone else has since used is not ours to remove.
+    """
 
     def __init__(self, path: Path):
         self.path = Path(path)
         self._created = False
 
     def prepare(self) -> None:
-        pass                            # nothing to capture; undo is self-describing
+        """Capture what undo will need. Changes nothing."""
+        pass  # nothing to capture; undo is self-describing
 
     def apply(self) -> None:
+        """Make the change. Only valid after prepare."""
         if self.path.is_dir():
             return
         self.path.mkdir(parents=True, exist_ok=True)
         self._created = True
 
     def execute(self) -> None:
+        """Prepare and apply in one step."""
         self.prepare()
         self.apply()
 
     def journal_entry(self, root):
-        """None: a directory holds no content to lose, and `undo` already refuses to
-        remove one it did not create or one that is no longer empty."""
-        return None
+        """Nothing to journal.
+
+        A directory holds no content to lose, and `undo` already refuses to remove one
+        it did not create or one that is no longer empty.
+        """
+        return
 
     def undo(self) -> None:
+        """Reverse the change, unless the file no longer holds what we wrote."""
         if not self._created:
             return
         try:
             if not any(self.path.iterdir()):
                 self.path.rmdir()
         except OSError:
-            pass                        # someone else is using it; leave it alone
+            pass  # someone else is using it; leave it alone
         self._created = False
 
     def describe(self) -> str:
+        """A short label, used in rollback errors and logs."""
         return f"mkdir {self.path.name}"

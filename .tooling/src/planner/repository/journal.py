@@ -78,7 +78,7 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 log = logging.getLogger("planner.repository")
@@ -87,6 +87,7 @@ JOURNAL_NAME = ".planner-journal.json"
 
 
 def digest(data: bytes | None) -> str | None:
+    """The sha256 of some bytes, or None for absent content."""
     return None if data is None else hashlib.sha256(data).hexdigest()
 
 
@@ -95,11 +96,12 @@ class Entry:
     """One file's before-and-after, enough to undo it without the command object."""
 
     path: str
-    prior_hash: str | None          # None means "did not exist"
-    intended_hash: str | None       # None means "will be deleted"
-    prior_content: str | None       # kept so recovery needs nothing but this file
+    prior_hash: str | None  # None means "did not exist"
+    intended_hash: str | None  # None means "will be deleted"
+    prior_content: str | None  # kept so recovery needs nothing but this file
 
     def to_json(self) -> dict:
+        """The entry as a JSON-safe mapping."""
         return {
             "path": self.path,
             "prior_hash": self.prior_hash,
@@ -108,9 +110,14 @@ class Entry:
         }
 
     @classmethod
-    def from_json(cls, data: dict) -> "Entry":
-        return cls(data["path"], data["prior_hash"], data["intended_hash"],
-                   data["prior_content"])
+    def from_json(cls, data: dict) -> Entry:
+        """Rebuild an entry from its stored mapping."""
+        return cls(
+            data["path"],
+            data["prior_hash"],
+            data["intended_hash"],
+            data["prior_content"],
+        )
 
 
 @dataclass
@@ -123,12 +130,15 @@ class Conflict:
 
 @dataclass
 class RecoveryReport:
+    """What recovery did: restored, left alone, or declined to touch."""
+
     restored: list[str] = field(default_factory=list)
     untouched: list[str] = field(default_factory=list)
     conflicts: list[Conflict] = field(default_factory=list)
 
     @property
     def clean(self) -> bool:
+        """Whether recovery finished without leaving a conflict behind."""
         return not self.conflicts
 
     def __bool__(self) -> bool:
@@ -152,27 +162,40 @@ class Journal:
     # --- recording ----------------------------------------------------------------
 
     def begin(self, summary: str = "", actor: str = "", request_id: str = "") -> None:
-        """No-op: a file journal records only what is in flight, so there is nothing to
-        open. The arguments exist so the two backends share one interface -- the
-        Postgres one keeps them as audit metadata."""
+        """No-op for a file journal, which records only what is in flight.
+
+        The arguments exist so the two backends share one interface; the Postgres one
+        keeps them as audit metadata.
+        """
 
     def commit(self) -> None:
-        """Nothing to keep. See the module docstring: a finished transaction leaves no
-        trace here, which is precisely the gap the Postgres backend fills."""
+        """Nothing to keep.
+
+        See the module docstring: a finished transaction leaves no trace here, which is
+        precisely the gap the Postgres backend fills.
+        """
         self.clear()
 
     def rollback(self) -> None:
+        """Mark the operation abandoned and discard the journal."""
         self.clear()
 
     def conflicted(self, paths) -> None:
-        """A file journal keeps nothing after a transaction, so a mixed state can only
-        be logged here, not recorded. Use the Postgres backend if you need the
-        anomaly to survive the process -- that is one of the things it is for."""
-        log.error("rollback left the vault in a mixed state; these files hold content "
-                  "written outside this process and were not restored: %s", paths)
+        """Log a mixed state, which is all a file journal can do about one.
+
+        It keeps nothing after a transaction, so there is nowhere to record this. Use
+        the Postgres backend if the anomaly needs to survive the process -- that is one
+        of the things it is for.
+        """
+        log.error(
+            "rollback left the vault in a mixed state; these files hold content "
+            "written outside this process and were not restored: %s",
+            paths,
+        )
         self.clear()
 
     def has_pending(self) -> bool:
+        """Whether a journal is on disk, i.e. an operation never finished."""
         return self.path.is_file()
 
     def record(self, entry: Entry) -> None:
@@ -188,7 +211,7 @@ class Journal:
 
     def _flush(self) -> None:
         payload = {
-            "started": datetime.now(timezone.utc).isoformat(),
+            "started": datetime.now(UTC).isoformat(),
             "entries": [e.to_json() for e in self._entries],
         }
         handle, temporary = tempfile.mkstemp(dir=self.root, prefix=".planner-j-")
@@ -203,8 +226,11 @@ class Journal:
             raise
 
     def clear(self) -> None:
-        """Discard the journal. Called once a transaction has fully landed or has been
-        rolled back in memory -- in either case there is nothing left to recover."""
+        """Discard the journal.
+
+        Called once a transaction has fully landed or has been rolled back in memory --
+        in either case there is nothing left to recover.
+        """
         self._entries.clear()
         self.path.unlink(missing_ok=True)
 
@@ -238,9 +264,9 @@ class Journal:
             current_hash = digest(current)
 
             if current_hash == entry.prior_hash:
-                report.untouched.append(entry.path)      # our write never landed
+                report.untouched.append(entry.path)  # our write never landed
             elif current_hash == entry.intended_hash:
-                self._restore(target, entry)             # ours; undo it
+                self._restore(target, entry)  # ours; undo it
                 report.restored.append(entry.path)
             else:
                 report.conflicts.append(Conflict(entry.path))

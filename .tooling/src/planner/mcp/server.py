@@ -29,6 +29,7 @@ from ..service.notes import NoteService
 
 
 def build_service(root=None) -> NoteService:
+    """A service over the vault named by PLANNER_VAULT, or the argument."""
     root = root or os.environ.get("PLANNER_VAULT", ".")
     return NoteService(MarkdownNoteRepository(Path(root)))
 
@@ -81,13 +82,17 @@ COVERS = {
 #: Routes deliberately not exposed, and why. A route in neither this nor COVERS fails a
 #: test, so the next omission has to be an argument rather than an oversight.
 NOT_EXPOSED = {
-    ("POST", "/notes/bulk"):
-        "A model can call create_note repeatedly. Bulk adds only atomicity across the "
-        "batch, and an array-of-objects argument is a poor fit for tool calling -- more "
-        "ways to get it wrong than the guarantee is worth.",
-    ("GET", "/health"):
-        "Operational. A model has no use for liveness or the vault path, and a tool it "
-        "will never sensibly call is noise in every prompt that lists the tools.",
+    (
+        "POST",
+        "/notes/bulk",
+    ): "A model can call create_note repeatedly. Bulk adds only atomicity across the "
+    "batch, and an array-of-objects argument is a poor fit for tool calling -- more "
+    "ways to get it wrong than the guarantee is worth.",
+    (
+        "GET",
+        "/health",
+    ): "Operational. A model has no use for liveness or the vault path, and a tool it "
+    "will never sensibly call is noise in every prompt that lists the tools.",
 }
 
 
@@ -113,8 +118,14 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "kind": _kind_prop("Restrict to one type."),
-                "project": {"type": "string", "description": "Plain title of a project."},
-                "parent": {"type": "string", "description": "Direct children of this note."},
+                "project": {
+                    "type": "string",
+                    "description": "Plain title of a project.",
+                },
+                "parent": {
+                    "type": "string",
+                    "description": "Direct children of this note.",
+                },
                 "status": {"type": "string", "enum": list(S.ALL_STATUS)},
                 "open": {"type": "boolean", "default": False},
             },
@@ -145,8 +156,10 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
-                "changes": {"type": "object", "description":
-                            "Field name to new value; null to remove."},
+                "changes": {
+                    "type": "object",
+                    "description": "Field name to new value; null to remove.",
+                },
             },
             "required": ["title", "changes"],
         },
@@ -158,9 +171,16 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
-                "status": {"type": "string", "enum": list(S.CLOSED_STATUS),
-                           "default": "done"},
-                "on": {"type": "string", "format": "date", "description": "Defaults to today."},
+                "status": {
+                    "type": "string",
+                    "enum": list(S.CLOSED_STATUS),
+                    "default": "done",
+                },
+                "on": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Defaults to today.",
+                },
             },
             "required": ["title"],
         },
@@ -181,8 +201,11 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
-                "recursive": {"type": "boolean", "default": False,
-                              "description": "Whole subtree rather than one level."},
+                "recursive": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Whole subtree rather than one level.",
+                },
             },
             "required": ["title"],
         },
@@ -194,8 +217,11 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "title": {"type": "string"},
-                "status": {"type": "string", "enum": list(S.TICKET_STATUS),
-                           "default": "todo"},
+                "status": {
+                    "type": "string",
+                    "enum": list(S.TICKET_STATUS),
+                    "default": "todo",
+                },
             },
             "required": ["title"],
         },
@@ -215,6 +241,7 @@ TOOLS = [
 
 # --- dispatch -----------------------------------------------------------------------
 
+
 def call_tool(name: str, arguments: dict, service: NoteService | None = None) -> dict:
     """Run one tool. Transport-agnostic, so it is directly testable.
 
@@ -225,43 +252,58 @@ def call_tool(name: str, arguments: dict, service: NoteService | None = None) ->
     try:
         return {"ok": True, "result": _dispatch(name, arguments or {}, service)}
     except PlannerError as exc:
-        return {"ok": False, "error": str(exc),
-                "field": getattr(exc, "field", None)}
-    except Exception as exc:  # noqa: BLE001 -- surface, do not crash the server
+        return {"ok": False, "error": str(exc), "field": getattr(exc, "field", None)}
+    except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
 def _dispatch(name, args, service):
     if name == "list_notes":
         notes = service.list(
-            kind=args.get("kind"), open_only=args.get("open", False),
-            **{k: v for k, v in
-               {"project": args.get("project"), "parent": args.get("parent"),
-                "status": args.get("status")}.items() if v is not None})
+            kind=args.get("kind"),
+            open_only=args.get("open", False),
+            **{
+                k: v
+                for k, v in {
+                    "project": args.get("project"),
+                    "parent": args.get("parent"),
+                    "status": args.get("status"),
+                }.items()
+                if v is not None
+            },
+        )
         return [n.to_dict() for n in notes]
 
     if name == "get_note":
         return service.get(args["title"]).to_dict()
 
     if name == "create_note":
-        return service.create(Note.from_dict(
-            {k: v for k, v in args.items() if v is not None})).to_dict()
+        return service.create(
+            Note.from_dict({k: v for k, v in args.items() if v is not None})
+        ).to_dict()
 
     if name == "update_note":
         return service.update(args["title"], **args["changes"]).to_dict()
 
     if name == "get_children":
-        service.get(args["title"])       # a missing note is an error, not an empty list
-        found = (service.descendants_of(args["title"]) if args.get("recursive")
-                 else service.children_of(args["title"]))
+        service.get(args["title"])  # a missing note is an error, not an empty list
+        found = (
+            service.descendants_of(args["title"])
+            if args.get("recursive")
+            else service.children_of(args["title"])
+        )
         return [n.to_dict() for n in found]
 
     if name == "reopen_note":
-        return service.reopen(args["title"], status=args.get("status", "todo")).to_dict()
+        return service.reopen(
+            args["title"], status=args.get("status", "todo")
+        ).to_dict()
 
     if name == "close_note":
         on = date.fromisoformat(args["on"]) if args.get("on") else None
-        return service.close(args["title"], status=args.get("status", "done"), on=on).to_dict()
+        return service.close(
+            args["title"], status=args.get("status", "done"), on=on
+        ).to_dict()
 
     if name == "delete_note":
         service.delete(args["title"])
@@ -270,14 +312,19 @@ def _dispatch(name, args, service):
     if name == "describe_schema":
         return {
             "kinds": [
-                {"name": k.name, "folder": k.folder, "statuses": list(k.statuses),
-                 "default_status": k.default_status,
-                 "fields": list(S.allowed_fields(k.name)),
-                 "parent_kinds": list(k.parent_kinds)}
+                {
+                    "name": k.name,
+                    "folder": k.folder,
+                    "statuses": list(k.statuses),
+                    "default_status": k.default_status,
+                    "fields": list(S.allowed_fields(k.name)),
+                    "parent_kinds": list(k.parent_kinds),
+                }
                 for k in S.KINDS.values()
             ],
             "vocabularies": {
-                "issue_type": list(S.ISSUE_TYPE), "recur": list(S.RECUR),
+                "issue_type": list(S.ISSUE_TYPE),
+                "recur": list(S.RECUR),
                 "ticket_status": list(S.TICKET_STATUS),
                 "priority_range": list(S.PRIORITY_RANGE),
             },
@@ -291,11 +338,13 @@ def _dispatch(name, args, service):
 
 # --- stdio server -------------------------------------------------------------------
 
+
 async def serve():  # pragma: no cover - requires a live MCP client
     """Run over stdio. Imported lazily so the SDK stays an optional dependency."""
-    import mcp.types as types
     from mcp.server import Server
     from mcp.server.stdio import stdio_server
+
+    from mcp import types
 
     server = Server("planner")
     service = build_service()

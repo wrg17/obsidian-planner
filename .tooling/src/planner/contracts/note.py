@@ -37,7 +37,6 @@ from pydantic import ConfigDict, Field, create_model
 from ..domain import schema as S
 from .operations import DEMO
 
-
 # --- what the domain does not know -------------------------------------------------
 
 #: Storage type -> wire type. The default mapping; PRECISE overrides it where the API
@@ -47,7 +46,7 @@ BY_STORAGE_TYPE = {
     S.DATE: datetime.date,
     S.NUMBER: int,
     S.CHECKBOX: bool,
-    S.LINK: str,            # a plain title on the wire; [[wikilink]] only on disk
+    S.LINK: str,  # a plain title on the wire; [[wikilink]] only on disk
     S.LINK_LIST: list[str],
     S.TEXT_LIST: list[str],
 }
@@ -67,14 +66,14 @@ PRECISE = {
 DESCRIPTIONS = {
     "kind": "Determines the folder and which fields are legal.",
     "status": "Legal values depend on kind: tickets use backlog..cancelled, containers "
-              "use active/paused/done. See GET /schema.",
+    "use active/paused/done. See GET /schema.",
     "type": "Issue type; tickets only.",
     "priority": "1 is highest.",
     "done": "Additive with status == 'done': ticking either closes the ticket.",
     "parent": "Plain title, not [[wikilink]] syntax. Must exist, and must be a kind "
-              "permitted to hold this one.",
+    "permitted to hold this one.",
     "project": "Denormalised onto every ticket. Bases cannot walk a parent chain, so "
-               "without it 'everything in this project' is not expressible.",
+    "without it 'everything in this project' is not expressible.",
     "area": "The area this belongs to. Plain title.",
     "due": "When it is due.",
     "scheduled": "When you intend to work on it.",
@@ -140,16 +139,27 @@ OPTIONAL_FIELDS = {
 
 NoteIn = create_model(
     "NoteIn",
-    __config__=ConfigDict(extra="forbid", use_enum_values=True,
-                          json_schema_extra={"examples": [CREATE_EXAMPLE]}),
+    __config__=ConfigDict(
+        extra="forbid",
+        use_enum_values=True,
+        json_schema_extra={"examples": [CREATE_EXAMPLE]},
+    ),
     __doc__="A note to create. Which fields are legal depends on `kind`; sending one "
-            "that does not belong is a 422, and GET /schema publishes the rules.",
-    kind=(S.KindEnum, Field(..., description=DESCRIPTIONS["kind"],
-                            examples=EXAMPLES["kind"])),
-    title=(str, Field(..., min_length=1,
-                      description="Unique vault-wide. Obsidian resolves links by name, "
-                                  "so a doc and a task may not share one.",
-                      examples=[DEMO["new_title"]])),
+    "that does not belong is a 422, and GET /schema publishes the rules.",
+    kind=(
+        S.KindEnum,
+        Field(..., description=DESCRIPTIONS["kind"], examples=EXAMPLES["kind"]),
+    ),
+    title=(
+        str,
+        Field(
+            ...,
+            min_length=1,
+            description="Unique vault-wide. Obsidian resolves links by name, "
+            "so a doc and a task may not share one.",
+            examples=[DEMO["new_title"]],
+        ),
+    ),
     body=(str, Field("", description="Markdown after the frontmatter.")),
     **OPTIONAL_FIELDS,
 )
@@ -159,16 +169,18 @@ NotePatch = create_model(
     "NotePatch",
     __base__=NoteIn,
     __doc__="Partial update. Only fields present in the body are touched; a field sent "
-            "as `null` is removed from the note. `kind` cannot be changed.",
-    kind=(S.KindEnum | None, Field(None, description="Read-only; changing kind is a "
-                                                     "422.")),
+    "as `null` is removed from the note. `kind` cannot be changed.",
+    kind=(
+        S.KindEnum | None,
+        Field(None, description="Read-only; changing kind is a 422."),
+    ),
     title=(str | None, Field(None, description="Read-only; ignored if sent.")),
     body=(str | None, Field(None)),
 )
 
 
-
 # --- json schema --------------------------------------------------------------------
+
 
 def inline_refs(schema: dict) -> dict:
     """Resolve $defs into the properties that reference them.
@@ -184,8 +196,10 @@ def inline_refs(schema: dict) -> dict:
         if isinstance(node, dict):
             if "$ref" in node:
                 target = defs.get(node["$ref"].rsplit("/", 1)[-1], {})
-                return {**resolve(target),
-                        **{k: v for k, v in node.items() if k != "$ref"}}
+                return {
+                    **resolve(target),
+                    **{k: v for k, v in node.items() if k != "$ref"},
+                }
             return {k: resolve(v) for k, v in node.items()}
         if isinstance(node, list):
             return [resolve(item) for item in node]
@@ -215,6 +229,8 @@ def collapse_nullable(spec: dict) -> dict:
 def note_properties(*, omit=()) -> dict:
     """The writable note fields as self-contained JSON Schema, flattened for tools."""
     schema = inline_refs(NoteIn.model_json_schema())
-    return {name: collapse_nullable(spec)
-            for name, spec in schema["properties"].items()
-            if name not in omit}
+    return {
+        name: collapse_nullable(spec)
+        for name, spec in schema["properties"].items()
+        if name not in omit
+    }

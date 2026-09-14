@@ -28,10 +28,15 @@ def get_schema():
     """
     return SchemaOut(
         kinds=[
-            KindOut(name=k.name, folder=k.folder, statuses=list(k.statuses),
-                    default_status=k.default_status,
-                    fields=list(S.allowed_fields(k.name)),
-                    parent_kinds=list(k.parent_kinds), has_done=k.has_done)
+            KindOut(
+                name=k.name,
+                folder=k.folder,
+                statuses=list(k.statuses),
+                default_status=k.default_status,
+                fields=list(S.allowed_fields(k.name)),
+                parent_kinds=list(k.parent_kinds),
+                has_done=k.has_done,
+            )
             for k in S.KINDS.values()
         ],
         vocabularies={

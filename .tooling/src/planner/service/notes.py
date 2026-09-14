@@ -13,22 +13,29 @@ from datetime import date
 
 from ..domain import schema
 from ..domain.errors import (
-    ChildrenExist, NoteExists, PlannerError, ValidationError,
+    ChildrenExistError,
+    NoteExistsError,
+    PlannerError,
+    ValidationError,
 )
 from ..domain.note import Note
 from ..repository.base import NoteRepository
 
 
 class NoteService:
+    """The rules, independent of how a request arrived."""
+
     def __init__(self, repository: NoteRepository):
         self.repo = repository
 
     # --- queries ------------------------------------------------------------------
 
     def get(self, title: str) -> Note:
+        """The note with this title. Raises NoteNotFoundError."""
         return self.repo.get(title)
 
     def exists(self, title: str) -> bool:
+        """Whether a note with this title is stored."""
         return self.repo.exists(title)
 
     # `builtins.list[...]` throughout this class, not `list[...]`: the method below is
@@ -38,10 +45,12 @@ class NoteService:
     # subscriptable". The same shape of bug once made a pydantic field named `date`
     # unresolvable against `date | None`.
     def list(self, kind=None, open_only=False, **where) -> builtins.list[Note]:
+        """Notes matching the given kind and field values."""
         if kind is not None and kind not in schema.KINDS:
             raise ValidationError(f"unknown kind {kind!r}", "kind")
         notes = [
-            n for n in self.repo.iter_all()
+            n
+            for n in self.repo.iter_all()
             if (kind is None or n.kind == kind)
             and all(self._matches(n, k, v) for k, v in where.items())
         ]
@@ -59,8 +68,11 @@ class NoteService:
         which reads as "no children" rather than "you spelled it differently".
         """
         actual = note.fields.get(field)
-        if field in schema.LINK_FIELDS and isinstance(actual, str) \
-                and isinstance(wanted, str):
+        if (
+            field in schema.LINK_FIELDS
+            and isinstance(actual, str)
+            and isinstance(wanted, str)
+        ):
             return actual.casefold() == wanted.casefold()
         return actual == wanted
 
@@ -75,12 +87,13 @@ class NoteService:
         return self.list(parent=title)
 
     def descendants_of(self, title: str) -> builtins.list[Note]:
+        """Every note below this one, at any depth."""
         found, frontier = [], [title]
         seen = {title}
         while frontier:
             current = frontier.pop()
             for child in self.list(parent=current):
-                if child.title in seen:      # a hand-edited cycle must not hang us
+                if child.title in seen:  # a hand-edited cycle must not hang us
                     continue
                 seen.add(child.title)
                 found.append(child)
@@ -131,29 +144,35 @@ class NoteService:
             for field in ("blocked_by", "supersedes"):
                 for target in note.fields.get(field) or []:
                     if target.casefold() not in known:
-                        found.append((title, f"{field} entry {target!r} does not exist"))
+                        found.append(
+                            (title, f"{field} entry {target!r} does not exist")
+                        )
         return sorted(found)
 
     # --- commands -----------------------------------------------------------------
 
     def create(self, note: Note | None = None, **kwargs) -> Note:
+        """Write a new note, applying defaults and checking its links."""
         note = note or Note.from_dict(kwargs)
         note.validate()
         clash = self._title_clash(note.title)
         if clash is not None:
-            raise NoteExists(
+            raise NoteExistsError(
                 f"a note titled {clash!r} already exists"
-                + ("" if clash == note.title else " (titles differ only by case)"))
+                + ("" if clash == note.title else " (titles differ only by case)")
+            )
         self._check_parent(note)
         self._check_references(note)
         self._apply_defaults(note)
         return self.repo.save(note)
 
     def update(self, title: str, **changes) -> Note:
+        """Change fields on an existing note. A None value removes one."""
         note = self.repo.get(title)
         if changes.get("kind") not in (None, note.kind):
             raise ValidationError(
-                "kind cannot be changed; delete and recreate instead", "kind")
+                "kind cannot be changed; delete and recreate instead", "kind"
+            )
         changes.pop("kind", None)
         for key, value in changes.items():
             if value is None:
@@ -178,12 +197,13 @@ class NoteService:
         `cascade=True` removes the subtree instead, which is the other consistent
         answer. Returns every title removed, deepest first.
         """
-        self.repo.get(title)                 # 404 before anything else
+        self.repo.get(title)  # 404 before anything else
         children = self.children_of(title)
         if children and not cascade:
-            raise ChildrenExist(
+            raise ChildrenExistError(
                 f"{title!r} has {len(children)} child note(s): "
-                f"{[c.title for c in children]}. Re-parent them, or pass cascade.")
+                f"{[c.title for c in children]}. Re-parent them, or pass cascade."
+            )
         removed = []
         # One transaction for the whole subtree. Without it a failure part-way leaves
         # some children deleted and the rest pointing at a parent that is about to be,
@@ -231,7 +251,9 @@ class NoteService:
         if status not in schema.CLOSED_STATUS:
             raise ValidationError(
                 f"{status!r} does not close a ticket; use one of "
-                f"{list(schema.CLOSED_STATUS)}", "status")
+                f"{list(schema.CLOSED_STATUS)}",
+                "status",
+            )
         note = self.repo.get(title)
         self._require_ticket(note, "closed")
         changes = {"status": status, "closed": on or date.today()}
@@ -242,12 +264,14 @@ class NoteService:
         return self.update(title, **changes)
 
     def reopen(self, title: str, status: str = "todo") -> Note:
+        """Put a closed ticket back into an open status."""
         note = self.repo.get(title)
         self._require_ticket(note, "reopened")
         spec = schema.KINDS[note.kind]
         if spec.statuses and status not in spec.statuses:
             raise ValidationError(
-                f"status {status!r} not one of {list(spec.statuses)}", "status")
+                f"status {status!r} not one of {list(spec.statuses)}", "status"
+            )
         changes = {"status": status, "closed": None}
         if spec.has_done:
             changes["done"] = False
@@ -273,7 +297,8 @@ class NoteService:
             for target in note.fields.get(field) or []:
                 if not self.repo.exists(target):
                     raise ValidationError(
-                        f"{field} entry {target!r} does not exist", field)
+                        f"{field} entry {target!r} does not exist", field
+                    )
 
     def _require_ticket(self, note: Note, verb: str) -> None:
         """Guard the ticket-only operations with a message about the actual problem.
@@ -285,7 +310,9 @@ class NoteService:
         if note.kind not in schema.TICKET_KINDS:
             raise ValidationError(
                 f"a {note.kind} cannot be {verb}; only "
-                f"{list(schema.TICKET_KINDS)} track completion", "kind")
+                f"{list(schema.TICKET_KINDS)} track completion",
+                "kind",
+            )
 
     def _title_clash(self, title: str) -> str | None:
         """An existing title equal to `title` ignoring case, if any.
@@ -330,4 +357,6 @@ class NoteService:
             if actual not in allowed:
                 raise ValidationError(
                     f"a {note.kind} may not hang off a {actual}; "
-                    f"expected one of {list(allowed)}", "parent")
+                    f"expected one of {list(allowed)}",
+                    "parent",
+                )

@@ -63,10 +63,12 @@ class Route:
             raise KeyError(
                 f"{self.method} {self.path} has no entry in "
                 f"contracts/operations.py -- every route needs a summary and "
-                f"guidance before it can be served") from None
+                f"guidance before it can be served"
+            ) from None
 
     @property
     def summary(self) -> str:
+        """The one-line label, from the shared operations table."""
         return self.docs.summary
 
     @property
@@ -79,31 +81,86 @@ class Route:
 #: document and therefore in Swagger, so related operations sit together.
 ROUTES: tuple[Route, ...] = (
     # --- notes --------------------------------------------------------------------
-    Route("GET", "/notes", notes.list_notes, ("notes",),
-          list[NoteOut], responses=VALIDATION),
-    Route("POST", "/notes", notes.create_note, ("notes",),
-          NoteOut, 201, {**VALIDATION, **CONFLICT}),
-    Route("POST", "/notes/bulk", notes.create_many, ("notes",),
-          list[NoteOut], 201, {**VALIDATION, **CONFLICT}),
-    Route("GET", "/notes/{title}", notes.get_note, ("notes",),
-          NoteOut, responses=NOT_FOUND),
-    Route("PATCH", "/notes/{title}", notes.update_note, ("notes",),
-          NoteOut, responses={**VALIDATION, **NOT_FOUND}),
-    Route("DELETE", "/notes/{title}", notes.delete_note, ("notes",),
-          None, 204,
-          {**NOT_FOUND,
-           409: {"model": ErrorOut, "description": "Would orphan child notes"}}),
-
+    Route(
+        "GET",
+        "/notes",
+        notes.list_notes,
+        ("notes",),
+        list[NoteOut],
+        responses=VALIDATION,
+    ),
+    Route(
+        "POST",
+        "/notes",
+        notes.create_note,
+        ("notes",),
+        NoteOut,
+        201,
+        {**VALIDATION, **CONFLICT},
+    ),
+    Route(
+        "POST",
+        "/notes/bulk",
+        notes.create_many,
+        ("notes",),
+        list[NoteOut],
+        201,
+        {**VALIDATION, **CONFLICT},
+    ),
+    Route(
+        "GET",
+        "/notes/{title}",
+        notes.get_note,
+        ("notes",),
+        NoteOut,
+        responses=NOT_FOUND,
+    ),
+    Route(
+        "PATCH",
+        "/notes/{title}",
+        notes.update_note,
+        ("notes",),
+        NoteOut,
+        responses={**VALIDATION, **NOT_FOUND},
+    ),
+    Route(
+        "DELETE",
+        "/notes/{title}",
+        notes.delete_note,
+        ("notes",),
+        None,
+        204,
+        {
+            **NOT_FOUND,
+            409: {"model": ErrorOut, "description": "Would orphan child notes"},
+        },
+    ),
     # --- hierarchy ----------------------------------------------------------------
-    Route("GET", "/notes/{title}/children", notes.get_children, ("hierarchy",),
-          list[NoteOut], responses=NOT_FOUND),
-
+    Route(
+        "GET",
+        "/notes/{title}/children",
+        notes.get_children,
+        ("hierarchy",),
+        list[NoteOut],
+        responses=NOT_FOUND,
+    ),
     # --- tickets ------------------------------------------------------------------
-    Route("POST", "/notes/{title}/close", notes.close_note, ("tickets",),
-          NoteOut, responses={**VALIDATION, **NOT_FOUND}),
-    Route("POST", "/notes/{title}/reopen", notes.reopen_note, ("tickets",),
-          NoteOut, responses={**VALIDATION, **NOT_FOUND}),
-
+    Route(
+        "POST",
+        "/notes/{title}/close",
+        notes.close_note,
+        ("tickets",),
+        NoteOut,
+        responses={**VALIDATION, **NOT_FOUND},
+    ),
+    Route(
+        "POST",
+        "/notes/{title}/reopen",
+        notes.reopen_note,
+        ("tickets",),
+        NoteOut,
+        responses={**VALIDATION, **NOT_FOUND},
+    ),
     # --- meta ---------------------------------------------------------------------
     Route("GET", "/schema", meta.get_schema, ("meta",), SchemaOut),
     Route("GET", "/problems", meta.get_problems, ("meta",), list[Problem]),

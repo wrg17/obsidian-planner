@@ -19,8 +19,8 @@ class TestTheDocsAreCurrent:
     def test_no_generated_section_is_stale(self):
         """Run `python -m planner.docsgen --write` from .tooling/ to fix."""
         assert docsgen.stale() == [], (
-            f"stale generated sections in {docsgen.stale()}; "
-            "run `python -m planner.docsgen --write`")
+            f"stale: {docsgen.stale()}; run `python -m planner.docsgen --write`"
+        )
 
     @pytest.mark.parametrize("name", docsgen.FILES)
     def test_the_file_exists_where_the_generator_looks(self, name):
@@ -48,20 +48,26 @@ class TestMarkers:
                 assert found in docsgen.SECTIONS, f"{name}: no generator for {found!r}"
 
     def test_every_generator_is_used_somewhere(self):
-        """A generator nothing references is dead code pretending to be documentation."""
+        """A generator nothing references is dead code pretending to be
+        documentation.
+        """
         sources = list(docsgen.FILES) + list(docsgen.TEMPLATES.values())
         combined = "".join((docsgen.REPO / n).read_text() for n in sources)
         for name in docsgen.SECTIONS:
-            assert (f"<!-- generated:{name} -->" in combined
-                    or f"%%generated:{name}%%" in combined), name
+            assert (
+                f"<!-- generated:{name} -->" in combined
+                or f"%%generated:{name}%%" in combined
+            ), name
 
     def test_an_unknown_marker_is_an_error_not_a_silent_skip(self):
         with pytest.raises(KeyError):
             docsgen.render("<!-- generated:invented -->\n<!-- /generated:invented -->")
 
     def test_prose_around_a_marker_survives(self):
-        text = ("Before.\n\n<!-- generated:endpoints -->\nstale\n"
-                "<!-- /generated:endpoints -->\n\nAfter.\n")
+        text = (
+            "Before.\n\n<!-- generated:endpoints -->\nstale\n"
+            "<!-- /generated:endpoints -->\n\nAfter.\n"
+        )
         out = docsgen.render(text)
         assert out.startswith("Before.") and out.endswith("After.\n")
         assert "stale" not in out
@@ -105,7 +111,7 @@ class TestTheSectionsMatchTheCode:
         key = ("GET", "/invented")
         OPERATIONS[key] = Operation(summary="Invented", guidance="For the test.")
         try:
-            docsgen.ROUTES = ROUTES + (Route(*key, lambda: None, ("meta",)),)
+            docsgen.ROUTES = (*ROUTES, Route(*key, lambda: None, ("meta",)))
             assert docsgen.endpoints() != before
             assert "/invented" in docsgen.endpoints()
         finally:
@@ -122,29 +128,32 @@ class TestWhatIsNotGenerated:
 
     def test_hand_written_counts_are_gone(self):
         """A test count in prose is a number someone has to maintain and nobody
-        benefits from; it was wrong within a day of being written."""
+        benefits from; it was wrong within a day of being written.
+        """
         readme = (docsgen.REPO / "README.md").read_text()
         assert not re.search(r"\b\d{3} tests\b", readme)
 
 
-
-
 class TestTheWriter:
     """Exercised against a temporary directory: a test for the writer that wrote to the
-    real README would edit the repository every time the suite ran."""
+    real README would edit the repository every time the suite ran.
+    """
 
     @pytest.fixture
     def fake_repo(self, tmp_path):
         """A miniature of the real layout: an in-place file with markers, and a
-        template whose output carries none."""
+        template whose output carries none.
+        """
         (tmp_path / "System.md").write_text(
             "Kept.\n\n%%generated:vocabularies%%\nout of date\n"
-            "%%/generated:vocabularies%%\n\nAlso kept.\n")
+            "%%/generated:vocabularies%%\n\nAlso kept.\n"
+        )
         template = tmp_path / docsgen.TEMPLATES["README.md"]
         template.parent.mkdir(parents=True)
         template.write_text(
             "<!-- editor note -->\n\nIntro.\n\n<!-- generated:endpoints -->\n"
-            "<!-- /generated:endpoints -->\n\nOutro.\n")
+            "<!-- /generated:endpoints -->\n\nOutro.\n"
+        )
         return tmp_path
 
     def test_it_reports_both_kinds_of_staleness(self, fake_repo):
@@ -172,7 +181,8 @@ class TestTheWriter:
 
     def test_a_missing_file_is_skipped_not_an_error(self, tmp_path):
         """System.md may legitimately be absent from a checkout that only wants the
-        package."""
+        package.
+        """
         assert docsgen.stale(tmp_path) == []
         assert docsgen.write(tmp_path) == []
 
@@ -185,7 +195,8 @@ class TestTheWriter:
 class TestNothingLeaksIntoObsidian:
     """Both docs sit inside the vault, so anything Obsidian does not recognise as a
     comment is visible in Live Preview. That is how `<!-- generated:layers -->` ended up
-    on screen in the manual."""
+    on screen in the manual.
+    """
 
     def test_the_readme_carries_no_markers_at_all(self):
         """It is rendered whole from a template, so the reader never sees plumbing."""
@@ -194,14 +205,16 @@ class TestNothingLeaksIntoObsidian:
 
     def test_the_template_header_does_not_reach_the_output(self):
         """The template opens with a note to whoever edits it; that is about the
-        template, not part of the document."""
+        template, not part of the document.
+        """
         template = (docsgen.REPO / docsgen.TEMPLATES["README.md"]).read_text()
         assert template.lstrip().startswith("<!--")
         assert not (docsgen.REPO / "README.md").read_text().lstrip().startswith("<!--")
 
     def test_system_md_uses_obsidian_comment_syntax(self):
         """`%%` is Obsidian's comment token -- confirmed in its own markdown token
-        table. HTML comments are not, and show as literal text."""
+        table. HTML comments are not, and show as literal text.
+        """
         text = (docsgen.REPO / "System.md").read_text()
         assert "%%generated:" in text
         assert "<!-- generated:" not in text
@@ -218,11 +231,13 @@ class TestNothingLeaksIntoObsidian:
 class TestGeneratedMarkdownActuallyRenders:
     """A generated block is markdown, and markdown is whitespace-sensitive. A table
     written directly beneath its marker is folded into the preceding paragraph and
-    renders as literal pipes -- which is exactly what happened in System.md."""
+    renders as literal pipes -- which is exactly what happened in System.md.
+    """
 
     def test_a_kept_marker_is_separated_from_its_content_by_a_blank_line(self):
         rendered = docsgen.render(
-            "Prose.\n\n%%generated:kinds%%\n%%/generated:kinds%%\n")
+            "Prose.\n\n%%generated:kinds%%\n%%/generated:kinds%%\n"
+        )
         lines = rendered.splitlines()
         opening = lines.index("%%generated:kinds%%")
         assert lines[opening + 1] == "", "no blank line after the opening marker"
@@ -239,9 +254,14 @@ class TestGeneratedMarkdownActuallyRenders:
         for filename in ("System.md", "README.md"):
             lines = (docsgen.REPO / filename).read_text().splitlines()
             for index, line in enumerate(lines):
-                if line.startswith("|") and index and not lines[index - 1].startswith("|"):
+                if (
+                    line.startswith("|")
+                    and index
+                    and not lines[index - 1].startswith("|")
+                ):
                     assert lines[index - 1].strip() == "", (
-                        f"{filename}:{index + 1} table has no blank line above it")
+                        f"{filename}:{index + 1} table has no blank line above it"
+                    )
 
     def test_rendering_stays_idempotent_with_the_padding(self):
         """The padding must not accumulate on repeated writes."""

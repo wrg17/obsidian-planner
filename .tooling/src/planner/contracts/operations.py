@@ -25,7 +25,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-
 #: Values that make "Try it out" work on a vault with the demo data loaded. A parameter
 #: with no example is a form a reader has to fill in before they can learn anything, and
 #: filling it in requires knowing a note title they have not been told.
@@ -34,20 +33,22 @@ from dataclasses import dataclass, field
 #: examples that quietly stopped resolving would be worse than none, because a reader
 #: would blame themselves for the 404.
 DEMO = {
-    "task": "Pick a type scale",          # open, and has subtasks, so /children works
-    "leaf": "Compare worktop quotes",     # no children -- DELETE demonstrates the
-                                          # endpoint rather than its guard rail, which
-                                          # is what a note with children would show
-    "parent": "Design system",            # an epic with four children
+    "task": "Pick a type scale",  # open, and has subtasks, so /children works
+    "leaf": "Compare worktop quotes",  # no children -- DELETE demonstrates the
+    # endpoint rather than its guard rail, which
+    # is what a note with children would show
+    "parent": "Design system",  # an epic with four children
     "project": "Website relaunch",
     "area": "Studio",
     "doc": "Worktop options",
-    "new_title": "Write release notes",   # deliberately absent, so POST succeeds
+    "new_title": "Write release notes",  # deliberately absent, so POST succeeds
 }
 
 
 @dataclass(frozen=True)
 class Operation:
+    """Everything said about one operation, shared by every transport."""
+
     summary: str
     guidance: str
     invariants: str = ""
@@ -55,18 +56,21 @@ class Operation:
 
     @property
     def description(self) -> str:
-        """Guidance first, then the contract -- used verbatim by OpenAPI and by the MCP
-        tool covering the same operation."""
-        return "\n\n".join(p for p in (self.guidance.strip(),
-                                        self.invariants.strip()) if p)
+        """Guidance first, then the contract.
+
+        Used verbatim by OpenAPI and by the MCP tool covering the same operation.
+        """
+        return "\n\n".join(
+            p for p in (self.guidance.strip(), self.invariants.strip()) if p
+        )
 
 
 #: Keyed by (method, path), matching the routing table.
 OPERATIONS: dict[tuple[str, str], Operation] = {
     ("GET", "/notes"): Operation(
         examples={"kind": "task", "project": DEMO["project"], "parent": DEMO["parent"]},
-        summary='List notes',
-        guidance='List notes, optionally filtered. Returns title, kind and every field for each. Use `open` to exclude done and cancelled work.',
+        summary="List notes",
+        guidance="List notes, optionally filtered. Returns title, kind and every field for each. Use `open` to exclude done and cancelled work.",
         invariants="""INVARIANTS
   L1. Pure. Listing never writes, and never touches mtime -- Triage's "stale" view
       reads mtime, so a read that bumped it would corrupt that signal. (S2)
@@ -86,8 +90,8 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
       not here. The two endpoints partition the vault.""",
     ),
     ("POST", "/notes"): Operation(
-        summary='Create a note',
-        guidance='Create a note. The folder is chosen from `kind`. Links are plain titles, not `[[wikilink]]` syntax. Which fields are legal depends on kind -- read GET /schema first if unsure.',
+        summary="Create a note",
+        guidance="Create a note. The folder is chosen from `kind`. Links are plain titles, not `[[wikilink]]` syntax. Which fields are legal depends on kind -- read GET /schema first if unsure.",
         invariants="""INVARIANTS
   C1. Not idempotent, and honest about it. A repeated POST is a 409, never a
       silent overwrite -- losing a note to a retried request is unacceptable when
@@ -110,8 +114,8 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
   C8. What is created is clean. A note made here never appears in /problems. (S8)""",
     ),
     ("POST", "/notes/bulk"): Operation(
-        summary='Create several notes as one transaction',
-        guidance='Create several notes as one transaction -- either all of them exist afterwards or none do. Order matters: a child listed before its parent fails.',
+        summary="Create several notes as one transaction",
+        guidance="Create several notes as one transaction -- either all of them exist afterwards or none do. Order matters: a child listed before its parent fails.",
         invariants="""INVARIANTS
   B1. All-or-nothing. One rejected note undoes the whole batch, restoring any file
       already written. This is the operation the unit of work exists for -- a
@@ -132,8 +136,8 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
     ),
     ("GET", "/notes/{title}"): Operation(
         examples={"title": DEMO["task"]},
-        summary='Fetch one note',
-        guidance='Fetch one note by title. Matching ignores case, as it does everywhere else.',
+        summary="Fetch one note",
+        guidance="Fetch one note by title. Matching ignores case, as it does everywhere else.",
         invariants="""INVARIANTS
   G1. Pure. (S2)
   G2. Lookup is case-insensitive, matching creation (C4). Without this the same
@@ -147,8 +151,8 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
     ),
     ("PATCH", "/notes/{title}"): Operation(
         examples={"title": DEMO["task"]},
-        summary='Update a note',
-        guidance='Change fields on an existing note. A field sent as null is removed; a field left out is untouched. `kind` cannot be changed.',
+        summary="Update a note",
+        guidance="Change fields on an existing note. A field sent as null is removed; a field left out is untouched. `kind` cannot be changed.",
         invariants="""INVARIANTS
   U1. Idempotent. Applying the same patch twice leaves the same state. (S6)
   U2. Minimal. Only fields present in the body are touched; everything else,
@@ -168,8 +172,8 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
     ),
     ("DELETE", "/notes/{title}"): Operation(
         examples={"title": DEMO["task"]},
-        summary='Delete a note',
-        guidance='Delete a note permanently. A note with children is refused unless you pass `cascade`.',
+        summary="Delete a note",
+        guidance="Delete a note permanently. A note with children is refused unless you pass `cascade`.",
         invariants="""INVARIANTS
   D1. Not idempotent, deliberately. The second call is a 404, the same answer GET
       and PATCH give for a missing note, so "does this exist?" has one answer
@@ -190,8 +194,8 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
     ),
     ("GET", "/notes/{title}/children"): Operation(
         examples={"title": DEMO["parent"]},
-        summary='Direct children',
-        guidance='The notes hanging off this one. Use `recursive` for the whole subtree. This is the query the Obsidian side cannot answer -- Bases has no joins and no recursion -- so it is worth reaching for rather than following `parent` one note at a time.',
+        summary="Direct children",
+        guidance="The notes hanging off this one. Use `recursive` for the whole subtree. This is the query the Obsidian side cannot answer -- Bases has no joins and no recursion -- so it is worth reaching for rather than following `parent` one note at a time.",
         invariants="""INVARIANTS
   H1. Pure. (S2)
   H2. A missing parent is 404, not []. An empty list means "exists, no children";
@@ -208,8 +212,8 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
     ),
     ("POST", "/notes/{title}/close"): Operation(
         examples={"title": DEMO["task"]},
-        summary='Close a ticket',
-        guidance='Close a ticket. Sets the status, ticks `done` and stamps `closed` in one step; all three must move together. Only tickets track completion -- a doc cannot be closed.',
+        summary="Close a ticket",
+        guidance="Close a ticket. Sets the status, ticks `done` and stamps `closed` in one step; all three must move together. Only tickets track completion -- a doc cannot be closed.",
         invariants="""INVARIANTS
   X1. Three fields move together, always. `status`, the `done` checkbox and the
       `closed` date are one transition. Triage carries a "Done but no closed date"
@@ -229,8 +233,8 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
     ),
     ("POST", "/notes/{title}/reopen"): Operation(
         examples={"title": DEMO["task"]},
-        summary='Reopen a ticket',
-        guidance='Reopen a closed ticket: clears `closed`, unticks `done`, and puts it back in the status you give. The inverse of close, though not a full undo -- the original closing date is gone.',
+        summary="Reopen a ticket",
+        guidance="Reopen a closed ticket: clears `closed`, unticks `done`, and puts it back in the status you give. The inverse of close, though not a full undo -- the original closing date is gone.",
         invariants="""INVARIANTS
   R1. The inverse of close for the fields close touches: `closed` is removed and
       `done` is false. It is not a full undo -- the original closing date is gone,
@@ -244,8 +248,8 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
   R6. Safe on an already-open ticket: it becomes a status change, not an error.""",
     ),
     ("GET", "/schema"): Operation(
-        summary='Kinds, fields, vocabularies',
-        guidance='The note types, which fields each allows, and the vocabularies. Read this before creating notes if unsure which fields apply to a kind; it is generated from the same module that enforces them, so it cannot promise something a write would reject.',
+        summary="Kinds, fields, vocabularies",
+        guidance="The note types, which fields each allows, and the vocabularies. Read this before creating notes if unsure which fields apply to a kind; it is generated from the same module that enforces them, so it cannot promise something a write would reject.",
         invariants="""INVARIANTS
   M1. Generated, not written. Every value comes from domain/schema.py, the same
       module the validator reads. It is therefore impossible for this endpoint to
@@ -264,8 +268,8 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
       without trial and error -- which is what an MCP model does with it.""",
     ),
     ("GET", "/problems"): Operation(
-        summary='Notes that fail to validate',
-        guidance='Notes that fail to parse or validate -- misspelled statuses, out-of-range priorities, structural links that do not resolve. Obsidian reports none of these itself, because Bases has no enum type and cannot follow a link to check it.',
+        summary="Notes that fail to validate",
+        guidance="Notes that fail to parse or validate -- misspelled statuses, out-of-range priorities, structural links that do not resolve. Obsidian reports none of these itself, because Bases has no enum type and cannot follow a link to check it.",
         invariants="""This is the Triage base as an endpoint, and it exists because of what Obsidian
 cannot do: Bases has no enum property type, so a misspelled status raises nothing
 -- the ticket simply stops appearing where you expect it. Nor can Bases follow a
@@ -295,8 +299,8 @@ INVARIANTS
   P7. Deterministic order, so two runs are diffable.""",
     ),
     ("GET", "/health"): Operation(
-        summary='Liveness and vault reachability',
-        guidance='Liveness, the resolved vault path, and whether a transaction was interrupted.',
+        summary="Liveness and vault reachability",
+        guidance="Liveness, the resolved vault path, and whether a transaction was interrupted.",
         invariants="""INVARIANTS
   N1. Always 200 while the process is alive. A missing vault is reported in the
       body, not as an error status -- "the server is up but misconfigured" and

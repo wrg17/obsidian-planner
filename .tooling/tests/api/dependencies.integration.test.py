@@ -1,7 +1,5 @@
 """Wiring. Small surface, but it decides which vault every request talks to."""
 
-import pytest
-
 from planner.api.dependencies import build_service, get_repository
 from planner.repository.markdown import MarkdownNoteRepository
 from planner.service.notes import NoteService
@@ -18,7 +16,8 @@ class TestVaultLocation:
 
     def test_read_per_call_not_captured_at_import(self, tmp_path, monkeypatch):
         """Tests point the app at a temp vault without reimporting, and a running
-        server survives the variable changing underneath it."""
+        server survives the variable changing underneath it.
+        """
         monkeypatch.setenv("PLANNER_VAULT", str(tmp_path / "one"))
         first = get_repository().root
         monkeypatch.setenv("PLANNER_VAULT", str(tmp_path / "two"))
@@ -52,17 +51,24 @@ class TestAuditLabelling:
     """Writes carry their origin, so an audit row is traceable back to the call."""
 
     def test_the_service_is_labelled_with_the_request(self, client, populated):
-        client.post("/notes", json={"kind": "task", "title": "Labelled"},
-                    headers={"x-request-id": "trace-me"})
+        client.post(
+            "/notes",
+            json={"kind": "task", "title": "Labelled"},
+            headers={"x-request-id": "trace-me"},
+        )
         # The file journal keeps nothing, so assert on what was handed to it.
         from planner.api.dependencies import get_repository
+
         assert get_repository().describe.__doc__
 
     def test_every_route_is_labelled_without_remembering_to(self, client):
         """Labelling in the dependency rather than the controllers is what stops a new
-        endpoint shipping with an anonymous audit trail."""
+        endpoint shipping with an anonymous audit trail.
+        """
         import inspect
+
         from planner.api import dependencies
+
         source = inspect.getsource(dependencies.build_service)
         assert "describe(" in source
         assert "request_id" in source

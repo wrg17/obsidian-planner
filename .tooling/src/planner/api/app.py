@@ -41,11 +41,15 @@ async def lifespan(_app: FastAPI):
     """
     report = get_repository().recover()
     if report:
-        log.warning("recovered an interrupted transaction: %d restored, %d untouched",
-                    len(report.restored), len(report.untouched))
+        log.warning(
+            "recovered an interrupted transaction: %d restored, %d untouched",
+            len(report.restored),
+            len(report.untouched),
+        )
         for conflict in report.conflicts:
             log.warning("left alone (%s): %s", conflict.reason, conflict.path)
     yield
+
 
 DESCRIPTION = f"""
 Jira-style tickets and Confluence-style docs over an Obsidian vault.
@@ -71,6 +75,7 @@ what this API will never itself do, and what it will tell you about afterwards.
 
 
 def create_app() -> FastAPI:
+    """Build the application: middleware, error handlers, routes."""
     app = FastAPI(
         lifespan=lifespan,
         # Swagger UI is served by hand below so it can carry a theme; FastAPI would
@@ -89,7 +94,10 @@ def create_app() -> FastAPI:
     )
     app.middleware("http")(correlation_id)
     app.add_middleware(
-        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     install_error_handlers(app)
     # One call: every endpoint is declared in routes.py, which is the file to read to

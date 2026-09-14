@@ -7,7 +7,7 @@ log answers three questions at once.
 
     RECOVERY    which operations were in flight when we died, and what did they
                 intend? (status = 'in_progress')
-    PROVENANCE  what did *we* last write to this path? Compare `intended_hash` of the
+    PROVENANCE  what did *we* last write to this path? Compare `intended_hash` of
                 latest committed operation against the file: equal means ours, different
                 means Obsidian's. This is the "who changed it" question made decidable
                 without needing provenance the filesystem does not store.
@@ -29,7 +29,7 @@ far more scrutiny than a hand-rolled write-temp-fsync-rename ever will.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import psycopg
@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS planner_operations (
     started_at   timestamptz NOT NULL DEFAULT now(),
     finished_at  timestamptz,
     CONSTRAINT planner_operations_status_check
-        CHECK (status IN ('in_progress','committed','rolled_back','recovered','conflicted'))
+        CHECK (status IN
+        ('in_progress','committed','rolled_back','recovered','conflicted'))
 );
 
 CREATE TABLE IF NOT EXISTS planner_operation_files (
@@ -81,6 +82,8 @@ CREATE INDEX IF NOT EXISTS planner_operations_finished
 
 
 class PostgresJournal:
+    """An append-only audit log that doubles as the recovery journal."""
+
     def __init__(self, root, dsn: str, retention: timedelta = DEFAULT_RETENTION):
         self.root = Path(root)
         self.dsn = dsn
@@ -97,16 +100,19 @@ class PostgresJournal:
             cur.execute(SCHEMA)
 
     def close(self) -> None:
+        """Close the connection."""
         self._conn.close()
 
     # --- recording ----------------------------------------------------------------
 
     def begin(self, summary: str = "", actor: str = "", request_id: str = "") -> None:
+        """Open an operation, recording who asked for it and why."""
         with self._conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO planner_operations (vault, status, summary, actor,"
                 " request_id) VALUES (%s, 'in_progress', %s, %s, %s) RETURNING id",
-                (str(self.root), summary, actor, request_id))
+                (str(self.root), summary, actor, request_id),
+            )
             self._operation_id = cur.fetchone()[0]
 
     def record(self, entry: Entry) -> None:
@@ -122,16 +128,26 @@ class PostgresJournal:
             cur.execute(
                 "INSERT INTO planner_operation_files (operation_id, path, prior_hash,"
                 " intended_hash, prior_content) VALUES (%s, %s, %s, %s, %s)",
-                (self._operation_id, entry.path, entry.prior_hash,
-                 entry.intended_hash, entry.prior_content))
+                (
+                    self._operation_id,
+                    entry.path,
+                    entry.prior_hash,
+                    entry.intended_hash,
+                    entry.prior_content,
+                ),
+            )
 
     def commit(self) -> None:
+        """Mark the operation complete."""
         self._finish("committed")
 
     def rollback(self) -> None:
-        """Mark abandoned. The caller has already undone the work in memory, so there
-        is nothing for recovery to do -- but the attempt is kept, because "we tried
-        this and backed out" is exactly the kind of thing an audit log exists for."""
+        """Mark abandoned.
+
+        The caller has already undone the work in memory, so there is nothing for
+        recovery to do -- but the attempt is kept, because "we tried this and backed
+        out" is exactly the kind of thing an audit log exists for.
+        """
         self._finish("rolled_back")
 
     def _finish(self, status: str) -> None:
@@ -140,7 +156,9 @@ class PostgresJournal:
         with self._conn.cursor() as cur:
             cur.execute(
                 "UPDATE planner_operations SET status = %s, finished_at = now()"
-                " WHERE id = %s", (status, self._operation_id))
+                " WHERE id = %s",
+                (status, self._operation_id),
+            )
         self._operation_id = None
 
     def conflicted(self, paths) -> None:
@@ -155,14 +173,18 @@ class PostgresJournal:
             cur.execute(
                 "UPDATE planner_operations SET status = 'conflicted',"
                 " finished_at = now(), summary = summary || %s WHERE id = %s",
-                (f" [not restored: {', '.join(paths)}]", self._operation_id))
+                (f" [not restored: {', '.join(paths)}]", self._operation_id),
+            )
         self._operation_id = None
 
     def has_pending(self) -> bool:
+        """Whether an operation for this vault is still in flight."""
         with self._conn.cursor() as cur:
             cur.execute(
                 "SELECT 1 FROM planner_operations WHERE vault = %s"
-                " AND status = 'in_progress' LIMIT 1", (str(self.root),))
+                " AND status = 'in_progress' LIMIT 1",
+                (str(self.root),),
+            )
             return cur.fetchone() is not None
 
     # --- recovery -----------------------------------------------------------------
@@ -178,7 +200,9 @@ class PostgresJournal:
         with self._conn.cursor() as cur:
             cur.execute(
                 "SELECT id FROM planner_operations WHERE vault = %s"
-                " AND status = 'in_progress' ORDER BY id DESC", (str(self.root),))
+                " AND status = 'in_progress' ORDER BY id DESC",
+                (str(self.root),),
+            )
             operation_ids = [row[0] for row in cur.fetchall()]
 
         for operation_id in operation_ids:
@@ -191,7 +215,9 @@ class PostgresJournal:
             cur.execute(
                 "SELECT path, prior_hash, intended_hash, prior_content"
                 " FROM planner_operation_files WHERE operation_id = %s"
-                " ORDER BY id DESC", (operation_id,))
+                " ORDER BY id DESC",
+                (operation_id,),
+            )
             rows = cur.fetchall()
 
         had_conflict = False
@@ -205,6 +231,7 @@ class PostgresJournal:
                 report.untouched.append(path)
             elif current_hash == entry.intended_hash:
                 from .journal import Journal
+
                 Journal._restore(target, entry)
                 report.restored.append(path)
             else:
@@ -217,7 +244,9 @@ class PostgresJournal:
         with self._conn.cursor() as cur:
             cur.execute(
                 "UPDATE planner_operations SET status = %s, finished_at = now()"
-                " WHERE id = %s", (status, operation_id))
+                " WHERE id = %s",
+                (status, operation_id),
+            )
 
     # --- history ------------------------------------------------------------------
 
@@ -234,18 +263,22 @@ class PostgresJournal:
                 " JOIN planner_operations o ON o.id = f.operation_id"
                 " WHERE f.path = %s AND o.vault = %s AND o.status = 'committed'"
                 " ORDER BY f.operation_id DESC, f.id DESC LIMIT 1",
-                (path, str(self.root)))
+                (path, str(self.root)),
+            )
             row = cur.fetchone()
             return row[0] if row else None
 
     def history(self, limit: int = 50) -> list[dict]:
+        """The most recent operations, newest first."""
         with self._conn.cursor() as cur:
             cur.execute(
                 "SELECT id, status, summary, actor, request_id, started_at,"
                 " finished_at FROM planner_operations WHERE vault = %s"
-                " ORDER BY id DESC LIMIT %s", (str(self.root), limit))
+                " ORDER BY id DESC LIMIT %s",
+                (str(self.root), limit),
+            )
             columns = [c.name for c in cur.description]
-            return [dict(zip(columns, row)) for row in cur.fetchall()]
+            return [dict(zip(columns, row, strict=True)) for row in cur.fetchall()]
 
     # --- retention ----------------------------------------------------------------
 
@@ -257,10 +290,11 @@ class PostgresJournal:
         keep a log is to still have it when someone finally asks. Files cascade with
         their operation.
         """
-        cutoff = (now or datetime.now(timezone.utc)) - self.retention
+        cutoff = (now or datetime.now(UTC)) - self.retention
         with self._conn.cursor() as cur:
             cur.execute(
                 "DELETE FROM planner_operations WHERE vault = %s"
                 " AND status = 'committed' AND finished_at < %s",
-                (str(self.root), cutoff))
+                (str(self.root), cutoff),
+            )
             return cur.rowcount

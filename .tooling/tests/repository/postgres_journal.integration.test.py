@@ -5,7 +5,7 @@ lifetimes: recovery cares only about in-flight operations, provenance only about
 committed ones, and history about everything until it is pruned.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 
@@ -16,15 +16,18 @@ from planner.repository.postgres_journal import DEFAULT_RETENTION, PostgresJourn
 
 
 def entry(path="Items/T.md", prior=b"original", intended=b"new"):
-    return Entry(path, digest(prior), digest(intended),
-                 None if prior is None else prior.decode())
+    return Entry(
+        path, digest(prior), digest(intended), None if prior is None else prior.decode()
+    )
 
 
 class TestSchema:
     def test_tables_are_created_on_connect(self, pg_journal):
         with pg_journal._conn.cursor() as cur:
-            cur.execute("SELECT to_regclass('planner_operations'),"
-                        " to_regclass('planner_operation_files')")
+            cur.execute(
+                "SELECT to_regclass('planner_operations'),"
+                " to_regclass('planner_operation_files')"
+            )
             assert all(cur.fetchone())
 
     def test_connecting_twice_is_safe(self, postgresql_dsn, tmp_path):
@@ -35,13 +38,17 @@ class TestSchema:
     def test_status_is_constrained_by_the_database(self, pg_journal):
         """A typo'd status would quietly make an operation invisible to recovery --
         the same class of bug as a misspelled note status, so the database refuses it
-        rather than trusting the code."""
+        rather than trusting the code.
+        """
         import psycopg
+
         pg_journal.begin()
         with pytest.raises(psycopg.errors.CheckViolation):
             with pg_journal._conn.cursor() as cur:
-                cur.execute("UPDATE planner_operations SET status = 'nonsense'"
-                            " WHERE id = %s", (pg_journal._operation_id,))
+                cur.execute(
+                    "UPDATE planner_operations SET status = 'nonsense' WHERE id = %s",
+                    (pg_journal._operation_id,),
+                )
 
 
 class TestOperationLifecycle:
@@ -56,7 +63,7 @@ class TestOperationLifecycle:
         assert not pg_journal.has_pending()
 
     def test_rollback_closes_it_but_keeps_the_attempt(self, pg_journal):
-        """"We tried this and backed out" is exactly what an audit log is for."""
+        """An attempt that was backed out is exactly what an audit log is for."""
         pg_journal.begin(summary="doomed")
         pg_journal.record(entry())
         pg_journal.rollback()
@@ -83,12 +90,14 @@ class TestOperationLifecycle:
 
     def test_operations_are_scoped_to_their_vault(self, postgresql_dsn, tmp_path):
         """One database can serve several vaults; recovery must not reach into
-        another's in-flight work."""
+        another's in-flight work.
+        """
         a = PostgresJournal(tmp_path / "a", postgresql_dsn)
         b = PostgresJournal(tmp_path / "b", postgresql_dsn)
         a.begin()
         assert a.has_pending() and not b.has_pending()
-        a.close(); b.close()
+        a.close()
+        b.close()
 
 
 class TestRecovery:
@@ -98,7 +107,7 @@ class TestRecovery:
         target.write_text("original")
         pg_journal.begin()
         pg_journal.record(entry())
-        target.write_text("new")          # applied, then "crash" -- never committed
+        target.write_text("new")  # applied, then "crash" -- never committed
 
         report = pg_journal.recover()
         assert target.read_text() == "original"
@@ -106,7 +115,8 @@ class TestRecovery:
 
     def test_an_unexplained_change_is_left_alone(self, pg_journal, tmp_path):
         """Same rule as the file journal: a change we cannot account for came from a
-        person editing their own notes, and is newer than our abandoned work."""
+        person editing their own notes, and is newer than our abandoned work.
+        """
         (tmp_path / "Items").mkdir()
         target = tmp_path / "Items" / "T.md"
         target.write_text("original")
@@ -135,7 +145,8 @@ class TestRecovery:
 
     def test_a_conflicted_operation_is_marked_distinctly(self, pg_journal, tmp_path):
         """Recovered and conflicted mean different things to whoever reads this later:
-        one was cleaned up, the other was left for a human."""
+        one was cleaned up, the other was left for a human.
+        """
         (tmp_path / "Items").mkdir()
         (tmp_path / "Items" / "T.md").write_text("something else entirely")
         pg_journal.begin()
@@ -154,14 +165,15 @@ class TestRecovery:
             pg_journal.begin()
             pg_journal.record(entry(path=f"Items/{name}.md"))
             target.write_text("new")
-            pg_journal._operation_id = None      # abandon without finishing
+            pg_journal._operation_id = None  # abandon without finishing
         report = pg_journal.recover()
         assert sorted(report.restored) == ["Items/a.md", "Items/b.md"]
 
 
 class TestProvenance:
-    """"Did Obsidian change this since we wrote it?" -- decidable without the
-    filesystem storing an author."""
+    """Whether Obsidian changed a note since we wrote it -- decidable without the
+    filesystem storing an author.
+    """
 
     def test_the_last_committed_write_is_recorded(self, pg_journal):
         pg_journal.begin()
@@ -189,7 +201,8 @@ class TestProvenance:
 
     def test_an_abandoned_write_never_counts_as_ours(self, pg_journal):
         """It never became the truth, so claiming it would misreport the next edit as
-        the user's when it was our own failure."""
+        the user's when it was our own failure.
+        """
         pg_journal.begin()
         pg_journal.record(entry(intended=b"never happened"))
         pg_journal.rollback()
@@ -228,15 +241,16 @@ class TestHistory:
 
 class TestRetention:
     def test_the_default_window_is_thirty_days(self):
-        assert DEFAULT_RETENTION == timedelta(days=30)
+        assert timedelta(days=30) == DEFAULT_RETENTION
 
     def test_old_committed_operations_are_pruned(self, pg_journal):
         pg_journal.begin(summary="ancient")
         pg_journal.record(entry())
         pg_journal.commit()
         with pg_journal._conn.cursor() as cur:
-            cur.execute("UPDATE planner_operations SET finished_at = now()"
-                        " - interval '31 days'")
+            cur.execute(
+                "UPDATE planner_operations SET finished_at = now() - interval '31 days'"
+            )
         assert pg_journal.prune() == 1
         assert pg_journal.history() == []
 
@@ -249,32 +263,38 @@ class TestRetention:
     @pytest.mark.parametrize("status", ["rolled_back", "recovered", "conflicted"])
     def test_only_committed_operations_are_pruned(self, pg_journal, status):
         """Anything that did not go cleanly is evidence, and the reason to keep a log
-        is to still have it when someone finally asks."""
+        is to still have it when someone finally asks.
+        """
         pg_journal.begin(summary="went wrong")
         pg_journal._finish(status)
         with pg_journal._conn.cursor() as cur:
-            cur.execute("UPDATE planner_operations SET finished_at = now()"
-                        " - interval '400 days'")
+            cur.execute(
+                "UPDATE planner_operations SET finished_at = now()"
+                " - interval '400 days'"
+            )
         assert pg_journal.prune() == 0
         assert pg_journal.history()[0]["status"] == status
 
     def test_in_flight_operations_are_never_pruned(self, pg_journal):
         pg_journal.begin()
         with pg_journal._conn.cursor() as cur:
-            cur.execute("UPDATE planner_operations SET started_at = now()"
-                        " - interval '400 days'")
+            cur.execute(
+                "UPDATE planner_operations SET started_at = now() - interval '400 days'"
+            )
         pg_journal.prune()
         assert pg_journal.has_pending()
 
     def test_files_are_removed_with_their_operation(self, pg_journal):
         """ON DELETE CASCADE: prior_content is the bulk of the table, and orphaned
-        rows would defeat the point of pruning."""
+        rows would defeat the point of pruning.
+        """
         pg_journal.begin()
         pg_journal.record(entry())
         pg_journal.commit()
         with pg_journal._conn.cursor() as cur:
-            cur.execute("UPDATE planner_operations SET finished_at = now()"
-                        " - interval '31 days'")
+            cur.execute(
+                "UPDATE planner_operations SET finished_at = now() - interval '31 days'"
+            )
         pg_journal.prune()
         with pg_journal._conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM planner_operation_files")
@@ -282,12 +302,14 @@ class TestRetention:
 
     def test_pruning_runs_during_recovery(self, pg_journal):
         """Startup is the natural moment: it already touches the log, and nothing else
-        reliably happens on a schedule."""
+        reliably happens on a schedule.
+        """
         pg_journal.begin(summary="ancient")
         pg_journal.commit()
         with pg_journal._conn.cursor() as cur:
-            cur.execute("UPDATE planner_operations SET finished_at = now()"
-                        " - interval '31 days'")
+            cur.execute(
+                "UPDATE planner_operations SET finished_at = now() - interval '31 days'"
+            )
         pg_journal.recover()
         assert pg_journal.history() == []
 
@@ -296,8 +318,9 @@ class TestRetention:
         journal.begin()
         journal.commit()
         with journal._conn.cursor() as cur:
-            cur.execute("UPDATE planner_operations SET finished_at = now()"
-                        " - interval '2 days'")
+            cur.execute(
+                "UPDATE planner_operations SET finished_at = now() - interval '2 days'"
+            )
         assert journal.prune() == 1
         journal.close()
 
@@ -315,8 +338,9 @@ class TestThroughTheRepository:
         assert row["summary"] == "create 'Audited'"
         assert row["request_id"] == "r1"
 
-    def test_a_rolled_back_transaction_is_recorded_as_such(self, postgresql_dsn,
-                                                           tmp_path):
+    def test_a_rolled_back_transaction_is_recorded_as_such(
+        self, postgresql_dsn, tmp_path
+    ):
         class Boom(Exception):
             pass
 
@@ -340,15 +364,17 @@ class TestThroughTheRepository:
         assert repo.journal.last_written("Items/Tracked.md") == on_disk
 
         repo.find("Tracked").write_text("edited by hand in obsidian")
-        assert repo.journal.last_written("Items/Tracked.md") != \
-            digest(repo.find("Tracked").read_bytes())
+        assert repo.journal.last_written("Items/Tracked.md") != digest(
+            repo.find("Tracked").read_bytes()
+        )
 
 
 class TestBrokenRollbackIsRecorded:
     """The contract is all-or-nothing. A concurrent edit is the one thing that can
     break it, and it is close to unreachable -- the exposure is milliseconds against a
     two-second autosave, on the exact file the transaction holds. Precisely because it
-    should never happen, it must be impossible to miss when it does."""
+    should never happen, it must be impossible to miss when it does.
+    """
 
     def test_a_conflicted_rollback_is_marked_distinctly(self, postgresql_dsn, tmp_path):
         for folder in ("Items", "Docs", "Meetings", "Reviews", "Journal"):
@@ -366,7 +392,7 @@ class TestBrokenRollbackIsRecorded:
                 raise Boom()
 
         row = repo.journal.history()[0]
-        assert row["status"] == "conflicted"          # not "rolled_back"
+        assert row["status"] == "conflicted"  # not "rolled_back"
         assert "not restored" in row["summary"]
         assert "T.md" in row["summary"]
 
@@ -386,13 +412,16 @@ class TestBrokenRollbackIsRecorded:
 
     def test_a_conflicted_operation_outlives_retention(self, pg_journal):
         """Pruning never removes it. A vault left in a mixed state is the thing
-        someone asks about months later."""
+        someone asks about months later.
+        """
         pg_journal.begin(summary="mixed state")
         pg_journal.record(entry())
         pg_journal.conflicted(["Items/T.md"])
         with pg_journal._conn.cursor() as cur:
-            cur.execute("UPDATE planner_operations SET finished_at = now()"
-                        " - interval '400 days'")
+            cur.execute(
+                "UPDATE planner_operations SET finished_at = now()"
+                " - interval '400 days'"
+            )
         assert pg_journal.prune() == 0
         assert pg_journal.history()[0]["status"] == "conflicted"
 

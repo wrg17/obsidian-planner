@@ -16,8 +16,9 @@ from planner.mcp import COVERS, TOOLS
 class TestCoverage:
     def test_every_route_is_documented(self):
         for route in ROUTES:
-            assert (route.method, route.path) in OPERATIONS, \
+            assert (route.method, route.path) in OPERATIONS, (
                 f"{route.method} {route.path} has no entry"
+            )
 
     def test_nothing_is_documented_that_is_not_served(self):
         """A stale entry describes an endpoint nobody can call."""
@@ -26,8 +27,9 @@ class TestCoverage:
 
     def test_an_undocumented_route_raises_rather_than_publishing_a_blank(self):
         from planner.api.routes import Route
+
         stray = Route("GET", "/never-documented", lambda: None, ("meta",))
-        with pytest.raises(KeyError, match="operations.py"):
+        with pytest.raises(KeyError, match=r"operations\.py"):
             _ = stray.summary
 
 
@@ -54,7 +56,8 @@ class TestEachEntry:
 
     def test_description_puts_guidance_first(self):
         """A reader meets the advice before the contract; the contract is longer and
-        less use to someone deciding whether this is the operation they want."""
+        less use to someone deciding whether this is the operation they want.
+        """
         operation = OPERATIONS[("POST", "/notes")]
         assert operation.description.startswith(operation.guidance.strip())
 
@@ -64,7 +67,8 @@ class TestEachEntry:
 
 class TestBothTransportsShowTheSameText:
     """The point of the move. A developer new to the repo needs the same thing a model
-    needs -- neither knows to read GET /schema before creating a note."""
+    needs -- neither knows to read GET /schema before creating a note.
+    """
 
     @pytest.mark.parametrize("tool", TOOLS, ids=lambda t: t["name"])
     def test_the_tool_description_is_the_operation_description(self, tool):
@@ -79,7 +83,8 @@ class TestBothTransportsShowTheSameText:
 
     def test_a_model_is_told_about_the_cascade_rule(self):
         """Concretely: delete refuses a parent. A model that has not been told will
-        simply try it and get an error it could not have anticipated."""
+        simply try it and get an error it could not have anticipated.
+        """
         delete = next(t for t in TOOLS if t["name"] == "delete_note")
         assert "cascade" in delete["description"]
 
@@ -103,6 +108,7 @@ class TestLayering:
         import inspect
 
         from planner.mcp import server
+
         source = inspect.getsource(server)
         assert "api.routes" not in source
         assert "contracts.operations" in source

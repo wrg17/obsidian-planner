@@ -11,21 +11,27 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from .fields import FIELD_TYPES
 from .vocabularies import (
-    CONTAINER_STATUS, DECISION_STATUS, DOC_STATUS, ROUTINE_STATUS, TICKET_STATUS,
+    CONTAINER_STATUS,
+    DECISION_STATUS,
+    DOC_STATUS,
+    ROUTINE_STATUS,
+    TICKET_STATUS,
 )
+
 
 @dataclass(frozen=True)
 class Kind:
+    """One note type: where it lives, what it may carry, how it looks."""
+
     name: str
     folder: str
     icon: str
     colour: str
     statuses: tuple[str, ...]
     default_status: str | None
-    fields: tuple[str, ...]           # beyond the shared ones
-    parent_kinds: tuple[str, ...] = ()   # what `parent` may point at
+    fields: tuple[str, ...]  # beyond the shared ones
+    parent_kinds: tuple[str, ...] = ()  # what `parent` may point at
     has_done: bool = False
 
 
@@ -33,34 +39,97 @@ class Kind:
 SHARED = ("kind", "icon", "iconColor", "created")
 
 KINDS: dict[str, Kind] = {
-    k.name: k for k in [
-        Kind("area", "Items", "LiLandPlot", "#8B5CF6",
-             CONTAINER_STATUS, "active", ()),
-        Kind("project", "Items", "LiFolderKanban", "#3B82F6",
-             CONTAINER_STATUS, "active", ("area", "priority", "due", "closed")),
-        Kind("epic", "Items", "LiLayers2", "#14B8A6",
-             TICKET_STATUS, "backlog",
-             ("type", "parent", "project", "priority", "due", "closed"),
-             parent_kinds=("project",), has_done=True),
-        Kind("task", "Items", "LiSquareCheck", "#D9A21B",
-             TICKET_STATUS, "todo",
-             ("type", "parent", "project", "priority", "due", "scheduled", "closed",
-              "blocked_by"),
-             parent_kinds=("epic", "project", "meeting"), has_done=True),
-        Kind("subtask", "Items", "LiCornerDownRight", "#B4762A",
-             TICKET_STATUS, "todo",
-             ("type", "parent", "project", "priority", "due", "closed"),
-             parent_kinds=("task",), has_done=True),
-        Kind("routine", "Items", "LiRepeat1", "#10B981",
-             ROUTINE_STATUS, "active", ("area", "recur", "last_done")),
-        Kind("doc", "Docs", "LiFileText", "#64748B",
-             DOC_STATUS, "draft", ("project", "area")),
-        Kind("decision", "Docs", "LiGitBranch", "#EC4899",
-             DECISION_STATUS, "proposed", ("project", "date", "supersedes")),
-        Kind("meeting", "Meetings", "LiUsers2", "#06B6D4",
-             (), None, ("project", "date", "attendees")),
-        Kind("review", "Reviews", "LiCalendarCheck", "#6366F1",
-             (), None, ("week",)),
+    k.name: k
+    for k in [
+        Kind("area", "Items", "LiLandPlot", "#8B5CF6", CONTAINER_STATUS, "active", ()),
+        Kind(
+            "project",
+            "Items",
+            "LiFolderKanban",
+            "#3B82F6",
+            CONTAINER_STATUS,
+            "active",
+            ("area", "priority", "due", "closed"),
+        ),
+        Kind(
+            "epic",
+            "Items",
+            "LiLayers2",
+            "#14B8A6",
+            TICKET_STATUS,
+            "backlog",
+            ("type", "parent", "project", "priority", "due", "closed"),
+            parent_kinds=("project",),
+            has_done=True,
+        ),
+        Kind(
+            "task",
+            "Items",
+            "LiSquareCheck",
+            "#D9A21B",
+            TICKET_STATUS,
+            "todo",
+            (
+                "type",
+                "parent",
+                "project",
+                "priority",
+                "due",
+                "scheduled",
+                "closed",
+                "blocked_by",
+            ),
+            parent_kinds=("epic", "project", "meeting"),
+            has_done=True,
+        ),
+        Kind(
+            "subtask",
+            "Items",
+            "LiCornerDownRight",
+            "#B4762A",
+            TICKET_STATUS,
+            "todo",
+            ("type", "parent", "project", "priority", "due", "closed"),
+            parent_kinds=("task",),
+            has_done=True,
+        ),
+        Kind(
+            "routine",
+            "Items",
+            "LiRepeat1",
+            "#10B981",
+            ROUTINE_STATUS,
+            "active",
+            ("area", "recur", "last_done"),
+        ),
+        Kind(
+            "doc",
+            "Docs",
+            "LiFileText",
+            "#64748B",
+            DOC_STATUS,
+            "draft",
+            ("project", "area"),
+        ),
+        Kind(
+            "decision",
+            "Docs",
+            "LiGitBranch",
+            "#EC4899",
+            DECISION_STATUS,
+            "proposed",
+            ("project", "date", "supersedes"),
+        ),
+        Kind(
+            "meeting",
+            "Meetings",
+            "LiUsers2",
+            "#06B6D4",
+            (),
+            None,
+            ("project", "date", "attendees"),
+        ),
+        Kind("review", "Reviews", "LiCalendarCheck", "#6366F1", (), None, ("week",)),
     ]
 }
 
@@ -93,4 +162,5 @@ def allowed_fields(kind: str) -> tuple[str, ...]:
 
 
 def folder_for(kind: str) -> str:
+    """The folder a note of this kind belongs in."""
     return KINDS[kind].folder

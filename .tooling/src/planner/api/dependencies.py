@@ -17,8 +17,10 @@ from ..service.notes import NoteService
 
 
 def get_repository() -> MarkdownNoteRepository:
-    """The vault, with the Postgres audit log when PLANNER_DSN points at a reachable
-    database and the file journal otherwise."""
+    """The vault, with whichever journal is reachable.
+
+    Postgres when PLANNER_DSN points at a live database, the file journal otherwise.
+    """
     return MarkdownNoteRepository(
         Path(os.environ.get("PLANNER_VAULT", ".")),
         dsn=os.environ.get("PLANNER_DSN"),

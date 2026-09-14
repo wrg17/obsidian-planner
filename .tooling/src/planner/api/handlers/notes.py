@@ -16,20 +16,22 @@ import datetime
 
 from fastapi import Depends, Path, Query, Response
 
-from ...domain import schema as S
 from ...contracts.operations import DEMO
+from ...domain import schema as S
 from ...domain.note import Note
 from ...service.notes import NoteService
 from ..dependencies import get_service
-from ..schemas import NoteIn, NoteOut, NotePatch
+from ..schemas import NoteIn, NotePatch
 
 
 def list_notes(
     kind: S.KindEnum | None = Query(None, description="Restrict to one kind."),
-    project: str | None = Query(None, description="Plain title.",
-                                examples=[DEMO["project"]]),
-    parent: str | None = Query(None, description="Direct children of this note.",
-                               examples=[DEMO["parent"]]),
+    project: str | None = Query(
+        None, description="Plain title.", examples=[DEMO["project"]]
+    ),
+    parent: str | None = Query(
+        None, description="Direct children of this note.", examples=[DEMO["parent"]]
+    ),
     status: S.StatusEnum | None = None,
     open_only: bool = Query(False, alias="open", description="Exclude closed work."),
     service: NoteService = Depends(get_service),
@@ -42,9 +44,11 @@ def list_notes(
     same operation publishes that text too, and neither transport should have to
     import the other to get it.
     """
-    where = {k: v for k, v in
-             {"project": project, "parent": parent, "status": status}.items()
-             if v is not None}
+    where = {
+        k: v
+        for k, v in {"project": project, "parent": parent, "status": status}.items()
+        if v is not None
+    }
     return [n.to_dict() for n in service.list(kind=kind, open_only=open_only, **where)]
 
 
@@ -57,7 +61,9 @@ def create_note(payload: NoteIn, service: NoteService = Depends(get_service)):
     same operation publishes that text too, and neither transport should have to
     import the other to get it.
     """
-    return service.create(Note.from_dict(payload.model_dump(exclude_none=True))).to_dict()
+    return service.create(
+        Note.from_dict(payload.model_dump(exclude_none=True))
+    ).to_dict()
 
 
 def create_many(payload: list[NoteIn], service: NoteService = Depends(get_service)):
@@ -73,8 +79,10 @@ def create_many(payload: list[NoteIn], service: NoteService = Depends(get_servic
     return [n.to_dict() for n in service.create_many(notes)]
 
 
-def get_note(title: str = Path(..., examples=[DEMO["task"]]),
-             service: NoteService = Depends(get_service)):
+def get_note(
+    title: str = Path(..., examples=[DEMO["task"]]),
+    service: NoteService = Depends(get_service),
+):
     """Fetch one note by title.
 
     What this operation promises -- the guidance a newcomer needs and the numbered
@@ -86,9 +94,11 @@ def get_note(title: str = Path(..., examples=[DEMO["task"]]),
     return service.get(title).to_dict()
 
 
-def update_note(payload: NotePatch,
-                title: str = Path(..., examples=[DEMO["task"]]),
-                service: NoteService = Depends(get_service)):
+def update_note(
+    payload: NotePatch,
+    title: str = Path(..., examples=[DEMO["task"]]),
+    service: NoteService = Depends(get_service),
+):
     """Partially update a note.
 
     What this operation promises -- the guidance a newcomer needs and the numbered
@@ -104,9 +114,11 @@ def update_note(payload: NotePatch,
 
 def delete_note(
     title: str = Path(..., examples=[DEMO["leaf"]]),
-    cascade: bool = Query(False, description=
-                          "Also delete every descendant. Without it, a note with "
-                          "children is refused."),
+    cascade: bool = Query(
+        False,
+        description="Also delete every descendant. Without it, a note with "
+        "children is refused.",
+    ),
     service: NoteService = Depends(get_service),
 ):
     """Delete a note.
@@ -134,7 +146,7 @@ def get_children(
     same operation publishes that text too, and neither transport should have to
     import the other to get it.
     """
-    service.get(title)          # 404 rather than an empty list for a missing parent
+    service.get(title)  # 404 rather than an empty list for a missing parent
     found = service.descendants_of(title) if recursive else service.children_of(title)
     return [n.to_dict() for n in found]
 
@@ -156,9 +168,11 @@ def close_note(
     return service.close(title, status=status, on=on).to_dict()
 
 
-def reopen_note(title: str = Path(..., examples=[DEMO["task"]]),
-                status: S.StatusEnum = Query(S.StatusEnum.TODO),
-                service: NoteService = Depends(get_service)):
+def reopen_note(
+    title: str = Path(..., examples=[DEMO["task"]]),
+    status: S.StatusEnum = Query(S.StatusEnum.TODO),
+    service: NoteService = Depends(get_service),
+):
     """Reopen a closed ticket.
 
     What this operation promises -- the guidance a newcomer needs and the numbered

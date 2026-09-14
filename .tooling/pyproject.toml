@@ -15,7 +15,7 @@ mcp = ["mcp>=1.0"]
 postgres = ["psycopg[binary]>=3.1"]
 docs = ["pdoc>=14"]
 dev = ["pytest>=8", "pytest-cov>=5", "httpx>=0.27", "fastapi>=0.110", "mcp>=1.0", "pdoc>=14",
-       "psycopg[binary]>=3.1", "pytest-postgresql>=6"]
+       "psycopg[binary]>=3.1", "pytest-postgresql>=6", "ruff>=0.6"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -65,3 +65,164 @@ exclude_also = [
   "if __name__ == .__main__.:",
   "pragma: no cover",
 ]
+
+
+# =====================================================================================
+# Ruff -- formatter and linter
+# =====================================================================================
+#
+# On the question of a "corporate standard": Airbnb's famous style guide is JavaScript
+# and Ruby, with no Python equivalent, and Meta's public position is essentially "use
+# Black". The one real published Python standard from a large shop is Google's, so the
+# selection below starts from it and adds the checks that catch bugs rather than
+# arguments -- which is where a linter actually earns its keep.
+#
+# Two rules here are not stylistic and are the reason this was worth adding: A001/A002
+# flag shadowing a builtin, and this codebase shipped that bug twice. A pydantic field
+# named `date` made `date | None` unresolvable, and a method named `list` did the same
+# to `list[Note]`. Both were found by a tool complaining -- pdoc, then FastAPI -- long
+# after the fact.
+
+[tool.ruff]
+# 88 rather than Google's 80. The prose in this codebase is already hand-wrapped to 88
+# throughout, and rewrapping several thousand lines of deliberate paragraphing to gain
+# eight characters would be a large diff for no reading benefit.
+line-length = 88
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W",      # pycodestyle
+  "F",           # pyflakes -- unused imports, undefined names
+  "I",           # isort
+  "N",           # pep8-naming
+  "D",           # pydocstyle
+  "UP",          # pyupgrade -- modern syntax for the target version
+  "B",           # flake8-bugbear -- mutable defaults, loop-variable capture
+  "A",           # flake8-builtins -- the shadowing rule this codebase needed
+  "C4",          # comprehensions
+  "DTZ",         # naive datetimes
+  "T20",         # stray print()
+  "PT",          # pytest style
+  "RET",         # return consistency
+  "SIM",         # simplifications
+  "PTH",         # pathlib over os.path
+  "ERA",         # commented-out code
+  "PL",          # pylint subset
+  "TRY",         # exception antipatterns
+  "RUF",         # ruff's own
+]
+
+ignore = [
+  # Google's convention does not want a docstring on every module, package and magic
+  # method, and neither does this codebase: a docstring that restates the function name
+  # is worse than none, because it looks like documentation.
+  "D100", "D104", "D105", "D107",
+  # Conflicts with the formatter.
+  "COM812", "ISC001",
+  # This codebase writes `"""Summary.` on the first line and a blank line after, which
+  # is D213/D203's preference; the defaults want the opposite.
+  "D203", "D213",
+  # Long messages passed straight to an exception. The alternative -- assigning to a
+  # variable first -- makes the raise harder to read, not easier.
+  "TRY003", "EM101", "EM102",
+
+  # Local imports are deliberate here and structural, not laziness. `mcp/server.py`
+  # imports the MCP SDK inside serve() so the package works without it installed;
+  # `contracts` and `repository` import each other's leaves inside functions to keep
+  # the layering acyclic. Enforcing top-level imports would mean either a hard
+  # dependency on an optional package or an import cycle.
+  "PLC0415",
+
+  # `assert a and b` in a test. Splitting it gives a better failure message, but 60 of
+  # them are pairs like `status_code == 200 and body`, where the second half is
+  # meaningless without the first and the message gains nothing.
+  "PT018",
+
+  # `date.today()` is correct for this domain. A planner's "due today" means today
+  # where the person is, not in UTC -- the vault stores local dates with no timezone
+  # because that is what Obsidian's date properties are.
+  "DTZ011",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPI's dependency injection *requires* a call in the argument default --
+# `Depends(get_service)`, `Query(...)`, `Path(...)`. B008 is right in general and wrong
+# for every framework built on this pattern.
+"src/planner/api/handlers/*" = ["B008"]
+
+# `from ...domain import schema as S`. The alias is a single capital on purpose: it
+# appears dozens of times per file as a namespace prefix, and `schema.TICKET_STATUS`
+# at that density reads worse than `S.TICKET_STATUS`.
+"src/planner/**" = ["N812"]
+"tests/**/*.py" = ["N812"]
+# Tests describe themselves in class and function names; a docstring on every one would
+# be noise. Asserts are the point. Magic numbers in a fixture are data.
+# Test names carry the identifier of the invariant they prove -- test_D2_deleting_a_
+# parent_is_refused -- so a failure names a documented rule rather than a bare
+# assertion. N802 wants them lowercase, which would throw that away. The rest: tests
+# describe themselves in their names, asserts are the point, and numbers in a fixture
+# are data rather than magic.
+"tests/**" = [
+  "D101", "D102", "D103", "N802", "S101", "PLR2004", "PLR0913", "PLR0915",
+  "ARG001", "ARG002", "T20", "SLF001",
+  # A test docstring says why the test exists -- what breaks if this stops holding. It
+  # is read when the test fails, in full, not skimmed from a summary line, so forcing
+  # the first sentence onto its own line buys nothing. The 22 in src/ were fixed
+  # instead, because pdoc renders those and shows only line one.
+  "D205",
+  # `pytest.raises` around several statements, and broad exception classes. Both are
+  # reasonable in a test that is asserting on a sequence rather than a single call.
+  "PT012", "PT011",
+  # `Boom` is the name of a test's deliberate failure, raised to see what a rollback
+  # does about it. `BoomError` would be a worse name for the same thing.
+  "N818",
+  # Reading a module's own source to assert something about it. A context manager for
+  # a one-line read in a test is ceremony.
+  "SIM115", "PTH123", "PTH120",
+  # Nested `with pytest.raises(...)` inside `with uow:` -- collapsing them would hide
+  # which context the exception is expected from.
+  "SIM117",
+  # Parametrize names as a string rather than a tuple. Stylistic, and the string form
+  # reads better next to the argument list it mirrors.
+  "PT006",
+  # A lambda passed as a test double.
+  "PLW0108",
+]
+# A script, and it prints deliberately -- that output is its user interface.
+# Re-export surfaces.
+"**/__init__.py" = ["F401", "D104"]
+
+# These files are mostly data held in strings -- CSS declarations, an inline SVG, the
+# prose of every operation's guidance and invariants. Wrapping a CSS rule or an SVG
+# path element at 88 columns makes it harder to read, not easier, and the prose is
+# already hand-wrapped inside its own quotes.
+"src/planner/api/docs.py" = ["E501"]
+# FastAPI endpoints take their path, query and dependency parameters as arguments, so
+# an endpoint with two filters and a service already exceeds the limit. The framework
+# decides this signature, not us.
+"src/planner/api/handlers/notes.py" = ["PLR0913", "PLR0917"]
+"src/planner/contracts/operations.py" = ["E501"]
+"demo/demo.py" = ["T20", "D103", "E501"]
+
+# `print` is this module's user interface: it is a command-line tool, and --check
+# reporting to stdout is the whole point.
+"src/planner/docsgen.py" = ["T201"]
+
+# os.replace rather than Path.replace, deliberately. It is the atomic-rename primitive
+# these modules are built on, the tests monkeypatch `os.replace` to simulate a failed
+# write, and Path.replace would hide it behind a method those tests could not reach.
+"src/planner/repository/commands.py" = ["PTH105"]
+"src/planner/repository/journal.py" = ["PTH105"]
+
+# A dispatch table reads best as a run of early returns; collapsing it to satisfy a
+# branch count would mean an if/elif ladder that is longer and no clearer.
+"src/planner/mcp/server.py" = ["PLR0911"]
+"src/planner/domain/note.py" = ["PLR0911"]
+
+[tool.ruff.format]
+docstring-code-format = true

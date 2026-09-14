@@ -13,32 +13,50 @@ class TestToolSchemas:
 
     def test_kind_is_an_enum_not_a_bare_string(self):
         """The whole point. A model given `"type": "string"` will send "Epic"; given
-        an enum it sends "epic". The schema is the specification it reads."""
+        an enum it sends "epic". The schema is the specification it reads.
+        """
         create = next(t for t in TOOLS if t["name"] == "create_note")
         kind = create["inputSchema"]["properties"]["kind"]
-        assert kind["enum"] == ["area", "project", "epic", "task", "subtask",
-                                "routine", "doc", "decision", "meeting", "review"]
+        assert kind["enum"] == [
+            "area",
+            "project",
+            "epic",
+            "task",
+            "subtask",
+            "routine",
+            "doc",
+            "decision",
+            "meeting",
+            "review",
+        ]
 
-    @pytest.mark.parametrize("tool,field,expected", [
-        ("create_note", "type", ["feature", "bug", "chore", "spike", "research"]),
-        ("create_note", "recur", ["daily", "weekdays", "weekly", "monthly"]),
-        ("close_note", "status", ["done", "cancelled"]),
-    ])
+    @pytest.mark.parametrize(
+        "tool,field,expected",
+        [
+            ("create_note", "type", ["feature", "bug", "chore", "spike", "research"]),
+            ("create_note", "recur", ["daily", "weekdays", "weekly", "monthly"]),
+            ("close_note", "status", ["done", "cancelled"]),
+        ],
+    )
     def test_vocabularies_are_enums(self, tool, field, expected):
         spec = next(t for t in TOOLS if t["name"] == tool)
         assert spec["inputSchema"]["properties"][field]["enum"] == expected
 
     def test_create_note_offers_every_writable_field(self):
         """It once offered sixteen of twenty -- no attendees, closed, done or
-        supersedes -- because the list was maintained by hand in three places."""
+        supersedes -- because the list was maintained by hand in three places.
+        """
         from planner.contracts import NoteIn
+
         spec = next(t for t in TOOLS if t["name"] == "create_note")
         assert set(spec["inputSchema"]["properties"]) == set(NoteIn.model_fields)
 
     def test_enums_are_generated_not_duplicated(self):
         """If someone adds a kind to the domain, the tool schema must follow without
-        anyone remembering to edit it."""
+        anyone remembering to edit it.
+        """
         from planner.domain import KIND_NAMES
+
         create = next(t for t in TOOLS if t["name"] == "create_note")
         assert create["inputSchema"]["properties"]["kind"]["enum"] == list(KIND_NAMES)
 
@@ -51,7 +69,10 @@ class TestDispatch:
     def test_list(self, populated):
         out = call_tool("list_notes", {"kind": "epic"}, populated)
         assert out["ok"]
-        assert {n["title"] for n in out["result"]} == {"Design system", "Content migration"}
+        assert {n["title"] for n in out["result"]} == {
+            "Design system",
+            "Content migration",
+        }
 
     def test_get(self, populated):
         out = call_tool("get_note", {"title": "Design system"}, populated)
@@ -63,9 +84,11 @@ class TestDispatch:
         assert populated.exists("From MCP")
 
     def test_update(self, populated):
-        out = call_tool("update_note",
-                        {"title": "Pick a type scale", "changes": {"status": "review"}},
-                        populated)
+        out = call_tool(
+            "update_note",
+            {"title": "Pick a type scale", "changes": {"status": "review"}},
+            populated,
+        )
         assert out["result"]["status"] == "review"
 
     def test_close_matches_the_rest_behaviour(self, populated):
@@ -85,18 +108,23 @@ class TestDispatch:
 
     def test_find_problems(self, populated):
         (populated.repo.root / "Items" / "Typo.md").write_text(
-            "---\nkind: task\nstatus: in-progress\n---\n")
+            "---\nkind: task\nstatus: in-progress\n---\n"
+        )
         out = call_tool("find_problems", {}, populated)
         assert any(p["title"] == "Typo" for p in out["result"])
 
 
 class TestErrorsAreReadable:
     """A model has to read the failure and correct itself, so errors come back as
-    payloads rather than exceptions."""
+    payloads rather than exceptions.
+    """
 
     def test_bad_vocabulary_names_the_field(self, populated):
-        out = call_tool("create_note",
-                        {"kind": "task", "title": "X", "status": "in-progress"}, populated)
+        out = call_tool(
+            "create_note",
+            {"kind": "task", "title": "X", "status": "in-progress"},
+            populated,
+        )
         assert out["ok"] is False
         assert out["field"] == "status"
         assert "in-progress" in out["error"]
@@ -113,9 +141,11 @@ class TestErrorsAreReadable:
         assert call_tool("nonsense", {}, populated)["ok"] is False
 
     def test_wrong_parent_kind(self, populated):
-        out = call_tool("create_note",
-                        {"kind": "subtask", "title": "S", "parent": "Website relaunch"},
-                        populated)
+        out = call_tool(
+            "create_note",
+            {"kind": "subtask", "title": "S", "parent": "Website relaunch"},
+            populated,
+        )
         assert out["ok"] is False and out["field"] == "parent"
 
 
@@ -134,11 +164,13 @@ class TestEveryRouteIsAccountedFor:
         from planner.mcp import COVERS, NOT_EXPOSED
 
         accounted = set(COVERS.values()) | set(NOT_EXPOSED)
-        missing = [(r.method, r.path) for r in ROUTES
-                   if (r.method, r.path) not in accounted]
+        missing = [
+            (r.method, r.path) for r in ROUTES if (r.method, r.path) not in accounted
+        ]
         assert not missing, (
             f"{missing} is neither exposed as a tool nor listed in NOT_EXPOSED. "
-            "Add a tool, or say why not.")
+            "Add a tool, or say why not."
+        )
 
     def test_every_mapping_points_at_a_real_route(self):
         from planner.api.routes import ROUTES
@@ -152,24 +184,28 @@ class TestEveryRouteIsAccountedFor:
 
     def test_covers_and_tools_agree(self):
         from planner.mcp import COVERS, TOOLS
+
         assert {t["name"] for t in TOOLS} == set(COVERS)
 
     def test_an_omission_carries_a_reason(self):
         """A blank entry would be a way to silence the test without deciding."""
         from planner.mcp import NOT_EXPOSED
+
         for key, reason in NOT_EXPOSED.items():
             assert len(reason) > 40, f"{key} has no real justification"
 
     def test_nothing_is_both_exposed_and_excluded(self):
         from planner.mcp import COVERS, NOT_EXPOSED
+
         assert not (set(COVERS.values()) & set(NOT_EXPOSED))
 
 
 class TestTheToolsThatWereMissing:
     def test_reopen_is_reachable(self, populated):
         call_tool("close_note", {"title": "Pick a type scale"}, populated)
-        out = call_tool("reopen_note", {"title": "Pick a type scale", "status": "doing"},
-                        populated)
+        out = call_tool(
+            "reopen_note", {"title": "Pick a type scale", "status": "doing"}, populated
+        )
         assert out["ok"]
         assert out["result"]["status"] == "doing"
         assert out["result"]["done"] is False
@@ -182,12 +218,15 @@ class TestTheToolsThatWereMissing:
 
     def test_children_one_level(self, populated):
         out = call_tool("get_children", {"title": "Design system"}, populated)
-        assert {n["title"] for n in out["result"]} == {"Pick a type scale",
-                                                       "Audit existing components"}
+        assert {n["title"] for n in out["result"]} == {
+            "Pick a type scale",
+            "Audit existing components",
+        }
 
     def test_children_recursive(self, populated):
-        out = call_tool("get_children", {"title": "Website relaunch",
-                                         "recursive": True}, populated)
+        out = call_tool(
+            "get_children", {"title": "Website relaunch", "recursive": True}, populated
+        )
         assert "Test at 320px" in {n["title"] for n in out["result"]}
 
     def test_children_of_a_missing_note_is_an_error_not_an_empty_list(self, populated):

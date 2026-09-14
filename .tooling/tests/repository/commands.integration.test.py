@@ -5,12 +5,16 @@ that undo restores exactly the state that existed immediately before it ran.
 """
 
 import os
-import stat
 
 import pytest
 
 from planner.repository.commands import (
-    Command, CommandError, CreateDirectory, DeleteFile, WriteFile, _atomic_write,
+    Command,
+    CommandError,
+    CreateDirectory,
+    DeleteFile,
+    WriteFile,
+    _atomic_write,
 )
 
 
@@ -20,22 +24,29 @@ def target(tmp_path):
 
 
 class TestConformance:
-    @pytest.mark.parametrize("factory", [
-        lambda p: WriteFile(p, "x"),
-        lambda p: DeleteFile(p),
-        lambda p: CreateDirectory(p),
-    ])
+    @pytest.mark.parametrize(
+        "factory",
+        [
+            lambda p: WriteFile(p, "x"),
+            lambda p: DeleteFile(p),
+            lambda p: CreateDirectory(p),
+        ],
+    )
     def test_every_command_satisfies_the_protocol(self, factory, target):
         assert isinstance(factory(target), Command)
 
-    @pytest.mark.parametrize("factory", [
-        lambda p: WriteFile(p, "x"),
-        lambda p: DeleteFile(p),
-        lambda p: CreateDirectory(p),
-    ])
+    @pytest.mark.parametrize(
+        "factory",
+        [
+            lambda p: WriteFile(p, "x"),
+            lambda p: DeleteFile(p),
+            lambda p: CreateDirectory(p),
+        ],
+    )
     def test_every_command_describes_itself(self, factory, target):
         """The description ends up in rollback errors, where "a command failed" would
-        be useless."""
+        be useless.
+        """
         assert factory(target).describe().strip()
 
 
@@ -69,7 +80,8 @@ class TestWriteFile:
 
     def test_running_twice_is_refused(self, target):
         """Re-running would capture the state it created as the state to restore,
-        making undo a no-op that silently keeps the change."""
+        making undo a no-op that silently keeps the change.
+        """
         command = WriteFile(target, "x")
         command.execute()
         with pytest.raises(CommandError, match="already run"):
@@ -91,10 +103,11 @@ class TestWriteFile:
     def test_prior_state_is_captured_at_execute_not_construction(self, target):
         """The rule that makes undo trustworthy inside a transaction: an earlier
         command may already have changed the file, and a snapshot taken when the
-        command was built would restore bytes that were never current."""
+        command was built would restore bytes that were never current.
+        """
         target.write_text("first")
-        command = WriteFile(target, "third")     # built now...
-        target.write_text("second")              # ...but the world moves on
+        command = WriteFile(target, "third")  # built now...
+        target.write_text("second")  # ...but the world moves on
         command.execute()
         command.undo()
         assert target.read_text() == "second"
@@ -109,9 +122,13 @@ class TestAtomicWrite:
         WriteFile(tmp_path / "a.md", "x").execute()
         assert [p.name for p in tmp_path.iterdir()] == ["a.md"]
 
-    def test_temporary_file_is_removed_when_the_write_fails(self, tmp_path, monkeypatch):
+    def test_temporary_file_is_removed_when_the_write_fails(
+        self, tmp_path, monkeypatch
+    ):
         """Otherwise a failed write litters the vault with .planner-*.tmp files that
-        Obsidian would happily index."""
+        Obsidian would happily index.
+        """
+
         def boom(*_args, **_kwargs):
             raise OSError("disk full")
 
@@ -134,7 +151,8 @@ class TestAtomicWrite:
 
     def test_temporary_file_shares_the_target_directory(self, tmp_path, monkeypatch):
         """os.replace is only atomic within one filesystem; a temp file elsewhere
-        would silently degrade to a copy."""
+        would silently degrade to a copy.
+        """
         seen = {}
         real = os.replace
 
@@ -186,7 +204,8 @@ class TestCreateDirectory:
 
     def test_existing_directory_is_left_alone_and_not_undone(self, tmp_path):
         """Undo may only remove what this command created; removing a pre-existing
-        directory would destroy something the caller never asked to touch."""
+        directory would destroy something the caller never asked to touch.
+        """
         existing = tmp_path / "Items"
         existing.mkdir()
         command = CreateDirectory(existing)
@@ -213,7 +232,7 @@ class TestCreateDirectory:
         created = tmp_path / "new"
         command = CreateDirectory(created)
         command.execute()
-        created.rmdir()                     # already gone; undo must not raise
+        created.rmdir()  # already gone; undo must not raise
         command.undo()
 
     def test_undo_is_idempotent(self, tmp_path):
@@ -230,7 +249,8 @@ class TestCreateDirectory:
 
 class TestPrepareApplySplit:
     """Execution is split so the journal can record intent between reading the world
-    and changing it. Applying without preparing would write with no undo captured."""
+    and changing it. Applying without preparing would write with no undo captured.
+    """
 
     def test_write_refuses_to_apply_unprepared(self, target):
         with pytest.raises(CommandError, match="not prepared"):
@@ -272,7 +292,8 @@ class TestPrepareApplySplit:
 
     def test_a_directory_needs_no_journal_entry(self, tmp_path):
         """It holds no content to lose, and undo already refuses to remove one it did
-        not create or one that is no longer empty."""
+        not create or one that is no longer empty.
+        """
         command = CreateDirectory(tmp_path / "new")
         command.prepare()
         assert command.journal_entry(tmp_path) is None
@@ -288,25 +309,25 @@ class TestUndoRefusesToClobber:
     """
 
     def test_a_concurrently_edited_file_is_not_restored(self, target):
-        from planner.repository.commands import ConcurrentModification
+        from planner.repository.commands import ConcurrentModificationError
 
         target.write_text("original")
         command = WriteFile(target, "ours")
         command.execute()
         target.write_text("edited in obsidian")
 
-        with pytest.raises(ConcurrentModification):
+        with pytest.raises(ConcurrentModificationError):
             command.undo()
         assert target.read_text() == "edited in obsidian"
 
     def test_the_error_names_the_file_and_says_what_was_left(self, target):
-        from planner.repository.commands import ConcurrentModification
+        from planner.repository.commands import ConcurrentModificationError
 
         target.write_text("original")
         command = WriteFile(target, "ours")
         command.execute()
         target.write_text("theirs")
-        with pytest.raises(ConcurrentModification) as caught:
+        with pytest.raises(ConcurrentModificationError) as caught:
             command.undo()
         assert target.name in str(caught.value)
         assert "left in place" in str(caught.value)
@@ -321,15 +342,16 @@ class TestUndoRefusesToClobber:
 
     def test_a_recreated_file_is_not_deleted_again(self, target):
         """We deleted it; the user made a new note with the same name. Undoing our
-        delete would restore our content over theirs."""
-        from planner.repository.commands import ConcurrentModification
+        delete would restore our content over theirs.
+        """
+        from planner.repository.commands import ConcurrentModificationError
 
         target.write_text("ours")
         command = DeleteFile(target)
         command.execute()
         target.write_text("a new note the user just made")
 
-        with pytest.raises(ConcurrentModification):
+        with pytest.raises(ConcurrentModificationError):
             command.undo()
         assert target.read_text() == "a new note the user just made"
 
@@ -342,13 +364,14 @@ class TestUndoRefusesToClobber:
 
     def test_a_created_file_edited_before_rollback_is_kept(self, target):
         """We created it, the user typed into it, then our transaction failed.
-        Deleting it would throw away work they can see on screen."""
-        from planner.repository.commands import ConcurrentModification
+        Deleting it would throw away work they can see on screen.
+        """
+        from planner.repository.commands import ConcurrentModificationError
 
         command = WriteFile(target, "our skeleton")
         command.execute()
         target.write_text("our skeleton plus their notes")
 
-        with pytest.raises(ConcurrentModification):
+        with pytest.raises(ConcurrentModificationError):
             command.undo()
         assert target.exists()

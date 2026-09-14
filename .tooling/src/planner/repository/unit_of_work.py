@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import logging
 
-from .commands import Command, CommandError, ConcurrentModification
+from .commands import Command, CommandError, ConcurrentModificationError
 from .journal import Journal  # noqa: F401 - type only
 
 log = logging.getLogger("planner.repository")
@@ -63,17 +63,23 @@ class RollbackError(CommandError):
     to reconcile that by hand.
     """
 
-    def __init__(self, cause: BaseException, failures: list[tuple[Command, BaseException]]):
+    def __init__(
+        self, cause: BaseException, failures: list[tuple[Command, BaseException]]
+    ):
         self.cause = cause
         self.failures = failures
         detail = "; ".join(f"{c.describe()}: {e}" for c, e in failures)
         super().__init__(
-            f"{cause}; rollback then failed for {len(failures)} command(s): {detail}")
+            f"{cause}; rollback then failed for {len(failures)} command(s): {detail}"
+        )
 
 
 class UnitOfWork:
-    def __init__(self, journal=None, summary: str = "", actor: str = "",
-                 request_id: str = ""):
+    """A group of commands that succeed or fail together."""
+
+    def __init__(
+        self, journal=None, summary: str = "", actor: str = "", request_id: str = ""
+    ):
         self._done: list[Command] = []
         self._depth = 0
         self._failed = False
@@ -87,9 +93,10 @@ class UnitOfWork:
 
     @property
     def active(self) -> bool:
+        """Whether a transaction is currently open."""
         return self._depth > 0
 
-    def enter(self) -> "UnitOfWork":
+    def enter(self) -> UnitOfWork:
         """Join, or open if this is the outermost caller.
 
         Nesting joins rather than starting a new transaction: `close()` calls
@@ -124,7 +131,7 @@ class UnitOfWork:
 
     # --- completion ---------------------------------------------------------------
 
-    def __enter__(self) -> "UnitOfWork":
+    def __enter__(self) -> UnitOfWork:
         return self.enter()
 
     def __exit__(self, exc_type, exc, _traceback) -> bool:
@@ -133,7 +140,7 @@ class UnitOfWork:
             self._failed = True
         failed = self._failed
         if self._depth > 0:
-            return False                # inner scope: outcome is the outer one's call
+            return False  # inner scope: outcome is the outer one's call
         try:
             if self._failed:
                 self.rollback(exc)
@@ -151,13 +158,12 @@ class UnitOfWork:
                     # The rollback could not complete: something outside this process
                     # holds one of the files. All-or-nothing was broken, and that has
                     # to survive the request rather than living in a log line.
-                    self._journal.conflicted(
-                        [str(c.path) for c in self.conflicts])
+                    self._journal.conflicted([str(c.path) for c in self.conflicts])
                 elif failed:
                     self._journal.rollback()
                 else:
                     self._journal.commit()
-        return False                    # never swallow the original exception
+        return False  # never swallow the original exception
 
     def rollback(self, cause: BaseException | None = None) -> None:
         """Undo everything applied, most recent first.
@@ -173,7 +179,7 @@ class UnitOfWork:
         for command in reversed(self._done):
             try:
                 command.undo()
-            except ConcurrentModification as exc:
+            except ConcurrentModificationError as exc:
                 # Not a failure: the command declined to act, which is the correct
                 # outcome. Logged loudly and kept on the unit of work, but it does not
                 # replace the original exception -- the caller needs to see why the
@@ -181,9 +187,9 @@ class UnitOfWork:
                 # someone's edit is not the reason.
                 self.conflicts.append(exc)
                 log.warning("%s", exc)
-            except Exception as exc:               # noqa: BLE001 - collected, not hidden
+            except Exception as exc:
                 failures.append((command, exc))
-                log.error("rollback failed for %s: %s", command.describe(), exc)
+                log.exception("rollback failed for %s", command.describe())
         self._done.clear()
         if failures:
             raise RollbackError(cause or CommandError("rollback requested"), failures)

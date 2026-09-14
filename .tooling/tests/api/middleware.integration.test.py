@@ -1,7 +1,5 @@
 """Correlation ids, timing headers, and the single error shape."""
 
-import pytest
-
 
 class TestMiddleware:
     def test_request_id_is_returned(self, client):
@@ -22,7 +20,8 @@ class TestMiddleware:
 class TestErrorNormalisation:
     def test_a_failure_with_no_input_value_still_reports(self, client):
         """Pydantic omits `input` for a missing required field, so the detail must
-        not depend on it being there."""
+        not depend on it being there.
+        """
         r = client.post("/notes", json={"title": "no kind given"})
         assert r.status_code == 422
         body = r.json()
@@ -35,8 +34,10 @@ class TestErrorNormalisation:
         assert "Epic" in r.json()["detail"]
 
     def test_domain_and_dto_errors_are_indistinguishable_in_shape(self, client):
-        dto = client.post("/notes", json={"kind": "task", "title": "A",
-                                          "priority": 99}).json()
-        domain = client.post("/notes", json={"kind": "subtask", "title": "B",
-                                             "parent": "Nope"}).json()
+        dto = client.post(
+            "/notes", json={"kind": "task", "title": "A", "priority": 99}
+        ).json()
+        domain = client.post(
+            "/notes", json={"kind": "subtask", "title": "B", "parent": "Nope"}
+        ).json()
         assert set(dto) == set(domain) == {"detail", "field"}

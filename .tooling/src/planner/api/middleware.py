@@ -1,7 +1,8 @@
 """Cross-cutting request handling: correlation ids, timing, and domain-error mapping.
 
-Error translation lives here rather than in the controllers so that every transport
-gets the same treatment from one place. A controller that catches NoteNotFound itself
+Error translation lives here rather than in the controllers so every transport
+gets the same treatment from one place. A controller that catches NoteNotFoundError
+itself
 is a controller that will eventually forget to, and the caller gets a 500 for a
 condition the domain described precisely.
 """
@@ -16,7 +17,11 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from ..domain.errors import (
-    ChildrenExist, NoteExists, NoteNotFound, PlannerError, ValidationError,
+    ChildrenExistError,
+    NoteExistsError,
+    NoteNotFoundError,
+    PlannerError,
+    ValidationError,
 )
 
 log = logging.getLogger("planner.api")
@@ -25,9 +30,9 @@ log = logging.getLogger("planner.api")
 #: place the two vocabularies meet.
 STATUS_FOR = {
     ValidationError: 422,
-    NoteNotFound: 404,
-    NoteExists: 409,
-    ChildrenExist: 409,
+    NoteNotFoundError: 404,
+    NoteExistsError: 409,
+    ChildrenExistError: 409,
 }
 
 
@@ -45,18 +50,24 @@ async def correlation_id(request: Request, call_next):
     elapsed_ms = (time.perf_counter() - started) * 1000
     response.headers["x-request-id"] = request_id
     response.headers["x-response-time-ms"] = f"{elapsed_ms:.1f}"
-    log.info("%s %s -> %s in %.1fms [%s]",
-             request.method, request.url.path, response.status_code, elapsed_ms, request_id)
+    log.info(
+        "%s %s -> %s in %.1fms [%s]",
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+        request_id,
+    )
     return response
 
 
 def install_error_handlers(app):
+    """Register the handlers that turn domain errors into the one error shape."""
     from fastapi.exceptions import RequestValidationError
 
     @app.exception_handler(RequestValidationError)
     async def _request_invalid(request: Request, exc: RequestValidationError):
-        """Normalise pydantic's failures into the same {detail, field} shape the
-        domain produces.
+        """Normalise pydantic's failures into the domain's error shape.
 
         Both layers now reject the same things -- the DTO enum catches a bad `status`
         before the domain sees it -- so which one fires is an implementation detail.
@@ -79,7 +90,8 @@ def install_error_handlers(app):
     @app.exception_handler(PlannerError)
     async def _domain_error(request: Request, exc: PlannerError):
         status = next(
-            (code for kind, code in STATUS_FOR.items() if isinstance(exc, kind)), 400)
+            (code for kind, code in STATUS_FOR.items() if isinstance(exc, kind)), 400
+        )
         return JSONResponse(
             status_code=status,
             content={"detail": str(exc), "field": getattr(exc, "field", None)},

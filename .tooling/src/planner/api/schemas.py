@@ -12,9 +12,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..contracts.note import NoteIn, NotePatch  # noqa: F401 - re-exported for routes
 
+
 class NoteOut(BaseModel):
-    """A note as stored. Dates are ISO strings and links are bare titles; `icon` and
-    `iconColor` are derived from kind and deliberately not echoed."""
+    """A note as stored.
+
+    Dates are ISO strings and links are bare titles; `icon` and `iconColor` are derived
+    from kind and deliberately not echoed.
+    """
 
     model_config = ConfigDict(extra="allow")
 
@@ -24,19 +28,26 @@ class NoteOut(BaseModel):
 
 
 class Problem(BaseModel):
+    """One note that fails to parse or validate, as GET /problems reports it."""
+
     title: str
     message: str
 
 
 class ErrorOut(BaseModel):
-    """Every deliberate 4xx from this API. FastAPI's own request-shape failures are
-    normalised into the same form by middleware, so a client models one error."""
+    """Every deliberate 4xx from this API.
+
+    FastAPI's own request-shape failures are normalised into the same form by
+    middleware, so a client models one error.
+    """
 
     detail: str
     field: str | None = Field(None, description="The offending property, when known.")
 
 
 class KindOut(BaseModel):
+    """One note kind, as GET /schema describes it."""
+
     name: str
     folder: str
     statuses: list[str]
@@ -47,5 +58,7 @@ class KindOut(BaseModel):
 
 
 class SchemaOut(BaseModel):
+    """The rules the server enforces: every kind, and the vocabularies."""
+
     kinds: list[KindOut]
     vocabularies: dict[str, list]

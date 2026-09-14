@@ -17,7 +17,8 @@ from __future__ import annotations
 import logging
 from typing import Protocol, runtime_checkable
 
-from .journal import Entry, Journal as FileJournal, RecoveryReport
+from .journal import Entry, RecoveryReport
+from .journal import Journal as FileJournal
 
 log = logging.getLogger("planner.repository")
 
@@ -51,7 +52,7 @@ class JournalBackend(Protocol):
         """Undo any operation an earlier process left in flight."""
 
     def has_pending(self) -> bool:
-        ...
+        """Whether an interrupted operation is awaiting recovery."""
 
 
 def resolve_journal(root, dsn: str | None, on_degrade=None) -> JournalBackend:
@@ -65,11 +66,15 @@ def resolve_journal(root, dsn: str | None, on_degrade=None) -> JournalBackend:
         return FileJournal(root)
     try:
         from .postgres_journal import PostgresJournal
+
         return PostgresJournal(root, dsn)
-    except Exception as exc:                    # noqa: BLE001 - degrading is the point
-        log.warning("postgres journal unavailable (%s); falling back to the file "
-                    "journal. Crash recovery still works; this operation will not "
-                    "appear in the audit log.", exc)
+    except Exception as exc:
+        log.warning(
+            "postgres journal unavailable (%s); falling back to the file "
+            "journal. Crash recovery still works; this operation will not "
+            "appear in the audit log.",
+            exc,
+        )
         if on_degrade is not None:
             on_degrade(exc)
         return FileJournal(root)

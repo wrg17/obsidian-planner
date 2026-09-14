@@ -1,4 +1,3 @@
-import os
 from datetime import date
 
 import pytest
@@ -18,7 +17,8 @@ def repo(tmp_path):
 @pytest.fixture
 def vault(repo):
     """The service, which is what callers actually use. Named `vault` because that is
-    what the tests read as: the thing you do planner things to."""
+    what the tests read as: the thing you do planner things to.
+    """
     return NoteService(repo)
 
 
@@ -45,24 +45,64 @@ def populated(vault):
     """
     vault.create(kind="area", title="Studio")
     vault.create(kind="project", title="Website relaunch", area="Studio", priority=2)
-    vault.create(kind="epic", title="Design system", parent="Website relaunch",
-                 project="Website relaunch", type="feature", status="doing")
-    vault.create(kind="task", title="Pick a type scale", parent="Design system",
-                 project="Website relaunch", type="feature", priority=1,
-                 due=date(2026, 8, 24), status="doing")
-    vault.create(kind="subtask", title="Test at 320px", parent="Pick a type scale",
-                 project="Website relaunch", type="feature")
-    vault.create(kind="routine", title="Inbox to zero", recur="weekdays",
-                 area="Studio", last_done=date(2026, 8, 21))
+    vault.create(
+        kind="epic",
+        title="Design system",
+        parent="Website relaunch",
+        project="Website relaunch",
+        type="feature",
+        status="doing",
+    )
+    vault.create(
+        kind="task",
+        title="Pick a type scale",
+        parent="Design system",
+        project="Website relaunch",
+        type="feature",
+        priority=1,
+        due=date(2026, 8, 24),
+        status="doing",
+    )
+    vault.create(
+        kind="subtask",
+        title="Test at 320px",
+        parent="Pick a type scale",
+        project="Website relaunch",
+        type="feature",
+    )
+    vault.create(
+        kind="routine",
+        title="Inbox to zero",
+        recur="weekdays",
+        area="Studio",
+        last_done=date(2026, 8, 21),
+    )
     # A second epic gives cascade tests a sibling that must survive, and a blocked
     # task gives the "non-structural reference" invariant something to point at.
-    vault.create(kind="epic", title="Content migration", parent="Website relaunch",
-                 project="Website relaunch", type="chore")
-    vault.create(kind="task", title="Export old posts", parent="Content migration",
-                 project="Website relaunch", type="chore", status="blocked",
-                 blocked_by=["Pick a type scale"])
-    vault.create(kind="task", title="Audit existing components", parent="Design system",
-                 project="Website relaunch", type="spike", status="todo")
+    vault.create(
+        kind="epic",
+        title="Content migration",
+        parent="Website relaunch",
+        project="Website relaunch",
+        type="chore",
+    )
+    vault.create(
+        kind="task",
+        title="Export old posts",
+        parent="Content migration",
+        project="Website relaunch",
+        type="chore",
+        status="blocked",
+        blocked_by=["Pick a type scale"],
+    )
+    vault.create(
+        kind="task",
+        title="Audit existing components",
+        parent="Design system",
+        project="Website relaunch",
+        type="spike",
+        status="todo",
+    )
     # A doc: the ticket-only operations need a kind that tracks no completion.
     vault.create(kind="doc", title="Worktop options", project="Website relaunch")
     return vault
@@ -71,6 +111,7 @@ def populated(vault):
 @pytest.fixture
 def client(populated, monkeypatch):
     from fastapi.testclient import TestClient
+
     from planner.api import app
 
     monkeypatch.setenv("PLANNER_VAULT", str(populated.repo.root))

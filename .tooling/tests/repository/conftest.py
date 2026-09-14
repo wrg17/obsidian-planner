@@ -26,13 +26,16 @@ EXTERNAL_DSN = os.environ.get("PLANNER_TEST_DSN")
 if EXTERNAL_DSN:
     _url = urlparse(EXTERNAL_DSN)
     postgresql_proc = factories.postgresql_noproc(
-        host=_url.hostname, port=_url.port,
-        user=_url.username, password=_url.password,
+        host=_url.hostname,
+        port=_url.port,
+        user=_url.username,
+        password=_url.password,
         dbname=(_url.path.lstrip("/") or "planner"),
     )
 elif shutil.which("initdb"):
     postgresql_proc = factories.postgresql_proc(port=None)
 else:
+
     @pytest.fixture(scope="session")
     def postgresql_proc():
         """Neither route is available, so say which one to take.
@@ -43,7 +46,9 @@ else:
         pytest.skip(
             "no database for the audit-log tests: run `make test`, which starts the "
             "compose db and sets PLANNER_TEST_DSN. (Set it yourself to point at any "
-            "Postgres, or install the postgres binaries to have one spawned.)")
+            "Postgres, or install the postgres binaries to have one spawned.)"
+        )
+
 
 postgresql_db = factories.postgresql("postgresql_proc")
 

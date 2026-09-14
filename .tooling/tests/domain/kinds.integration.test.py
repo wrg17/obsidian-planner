@@ -23,7 +23,8 @@ class TestKinds:
     @pytest.mark.parametrize("name,kind", S.KINDS.items())
     def test_default_status_is_in_its_own_vocabulary(self, name, kind):
         """A default outside the vocabulary would make every new note of that kind
-        land in Triage the moment it was created."""
+        land in Triage the moment it was created.
+        """
         if kind.default_status is not None:
             assert kind.default_status in kind.statuses
 
@@ -42,14 +43,16 @@ class TestKinds:
 
     def test_icons_are_lucide_ids_in_iconize_form(self):
         """Iconize's `Li` prefix plus CamelCase. A name it cannot resolve renders as
-        nothing at all -- silently, which is the whole problem."""
+        nothing at all -- silently, which is the whole problem.
+        """
         for kind in S.KINDS.values():
             assert kind.icon.startswith("Li")
             assert kind.icon[2].isupper()
 
     def test_colours_are_hex(self):
         """Unquoted hex is a YAML comment; the emitter quotes it, but a malformed
-        value would still be written out."""
+        value would still be written out.
+        """
         for kind in S.KINDS.values():
             assert kind.colour.startswith("#") and len(kind.colour) == 7
             int(kind.colour[1:], 16)
@@ -76,7 +79,8 @@ class TestAllowedFields:
     @pytest.mark.parametrize("name", S.KIND_NAMES)
     def test_every_field_has_a_declared_type(self, name):
         """A field with no entry in FIELD_TYPES gets no coercion, so a date would
-        stay a string and compare wrongly."""
+        stay a string and compare wrongly.
+        """
         for field in S.allowed_fields(name):
             assert field in S.FIELD_TYPES, f"{name}.{field} has no type"
 

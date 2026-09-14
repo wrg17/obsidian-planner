@@ -16,7 +16,11 @@ import pytest
 
 from planner.domain.note import Note
 from planner.repository.journal import (
-    JOURNAL_NAME, Entry, Journal, RecoveryReport, digest,
+    JOURNAL_NAME,
+    Entry,
+    Journal,
+    RecoveryReport,
+    digest,
 )
 from planner.repository.markdown import MarkdownNoteRepository
 
@@ -31,12 +35,14 @@ def crashed_after_writing(root, path, prior: str | None, intended: str | None):
     target.parent.mkdir(parents=True, exist_ok=True)
     if prior is not None:
         target.write_text(prior)
-    journal.record(Entry(
-        path=path,
-        prior_hash=digest(prior.encode() if prior is not None else None),
-        intended_hash=digest(intended.encode() if intended is not None else None),
-        prior_content=prior,
-    ))
+    journal.record(
+        Entry(
+            path=path,
+            prior_hash=digest(prior.encode() if prior is not None else None),
+            intended_hash=digest(intended.encode() if intended is not None else None),
+            prior_content=prior,
+        )
+    )
     if intended is None:
         target.unlink(missing_ok=True)
     else:
@@ -57,7 +63,8 @@ class TestNothingToDo:
     def test_an_unparseable_journal_is_ignored(self, tmp_path):
         """A journal that will not parse is itself evidence of a crash, possibly during
         its own write. Nothing safe can be inferred from it, and acting on a guess is
-        worse than leaving the vault as the user finds it."""
+        worse than leaving the vault as the user finds it.
+        """
         (tmp_path / JOURNAL_NAME).write_text("{ truncated")
         report = Journal(tmp_path).recover()
         assert not report.restored and report.clean
@@ -82,7 +89,9 @@ class TestRecoveryDecisionTable:
         journal = Journal(tmp_path)
         (tmp_path / "Items").mkdir()
         (tmp_path / "Items/T.md").write_text("original")
-        journal.record(Entry("Items/T.md", digest(b"original"), digest(b"new"), "original"))
+        journal.record(
+            Entry("Items/T.md", digest(b"original"), digest(b"new"), "original")
+        )
         report = Journal(tmp_path).recover()
         assert (tmp_path / "Items/T.md").read_text() == "original"
         assert report.untouched == ["Items/T.md"]
@@ -104,12 +113,15 @@ class TestRecoveryDecisionTable:
         """The case the whole design turns on. The file holds content we never wrote,
         so the only thing that can have produced it is a person editing their own
         notes after the crash -- and their edit is newer than our abandoned
-        transaction."""
+        transaction.
+        """
         crashed_after_writing(tmp_path, "Items/T.md", prior="original", intended="ours")
         (tmp_path / "Items/T.md").write_text("what the user typed in Obsidian")
 
         report = Journal(tmp_path).recover()
-        assert (tmp_path / "Items/T.md").read_text() == "what the user typed in Obsidian"
+        assert (
+            tmp_path / "Items/T.md"
+        ).read_text() == "what the user typed in Obsidian"
         assert not report.restored
         assert [c.path for c in report.conflicts] == ["Items/T.md"]
         assert not report.clean
@@ -135,12 +147,19 @@ class TestMultiFileRecovery:
         items.mkdir()
         for name, prior in (("a.md", "A"), ("b.md", "B"), ("c.md", "C")):
             (items / name).write_text(prior)
-            journal.record(Entry(f"Items/{name}", digest(prior.encode()),
-                                 digest(b"changed"), prior))
+            journal.record(
+                Entry(
+                    f"Items/{name}", digest(prior.encode()), digest(b"changed"), prior
+                )
+            )
             (items / name).write_text("changed")
 
         report = Journal(tmp_path).recover()
-        assert [(items / n).read_text() for n in ("a.md", "b.md", "c.md")] == ["A", "B", "C"]
+        assert [(items / n).read_text() for n in ("a.md", "b.md", "c.md")] == [
+            "A",
+            "B",
+            "C",
+        ]
         assert len(report.restored) == 3
 
     def test_one_conflict_does_not_block_the_rest(self, tmp_path):
@@ -149,8 +168,9 @@ class TestMultiFileRecovery:
         items.mkdir()
         for name in ("a.md", "b.md"):
             (items / name).write_text("original")
-            journal.record(Entry(f"Items/{name}", digest(b"original"),
-                                 digest(b"ours"), "original"))
+            journal.record(
+                Entry(f"Items/{name}", digest(b"original"), digest(b"ours"), "original")
+            )
             (items / name).write_text("ours")
         (items / "b.md").write_text("user's edit")
 
@@ -198,21 +218,22 @@ class TestThroughTheRepository:
         class Boom(Exception):
             pass
 
-        with pytest.raises(Boom):
-            with repo.unit_of_work():
-                repo.save(Note(kind="task", title="T"))
-                raise Boom()
+        with pytest.raises(Boom), repo.unit_of_work():
+            repo.save(Note(kind="task", title="T"))
+            raise Boom()
         assert not (repo.root / JOURNAL_NAME).exists()
 
     def test_recovery_undoes_a_simulated_crash(self, repo):
         """The end-to-end property: kill the process mid-transaction and the next
-        startup puts the vault back."""
+        startup puts the vault back.
+        """
         repo.save(Note(kind="task", title="T", fields={"priority": 1}))
         original = repo.find("T").read_bytes()
 
         # Journal an overwrite and apply it, then "die" without clearing.
-        entry = Entry("Items/T.md", digest(original), digest(b"corrupted"),
-                      original.decode())
+        entry = Entry(
+            "Items/T.md", digest(original), digest(b"corrupted"), original.decode()
+        )
         Journal(repo.root).record(entry)
         repo.find("T").write_bytes(b"corrupted")
 
@@ -223,7 +244,8 @@ class TestThroughTheRepository:
 
     def test_the_journal_is_never_mistaken_for_a_note(self, repo):
         """It lives at the vault root and starts with a dot, but a listing that picked
-        it up would report it as an unparseable note forever."""
+        it up would report it as an unparseable note forever.
+        """
         Journal(repo.root).record(Entry("Items/T.md", None, digest(b"x"), None))
         assert "planner-journal" not in " ".join(repo.titles())
         assert list(repo.iter_all()) == []
@@ -258,10 +280,12 @@ class TestJournalWriteFailure:
             journal.record(Entry("Items/T.md", None, digest(b"x"), None))
         assert list(tmp_path.iterdir()) == []
 
-    def test_a_failed_flush_propagates_rather_than_writing_blind(self, tmp_path,
-                                                                 monkeypatch):
+    def test_a_failed_flush_propagates_rather_than_writing_blind(
+        self, tmp_path, monkeypatch
+    ):
         """If intent cannot be recorded, the change must not happen -- an unjournalled
-        write is exactly the crash case recovery cannot reason about."""
+        write is exactly the crash case recovery cannot reason about.
+        """
         import os
 
         def boom(*_args, **_kwargs):
@@ -297,15 +321,19 @@ class TestCommitRecordWindow:
 
     def test_the_result_is_still_a_state_the_api_would_accept(self, repo):
         """Why undoing a good transaction is tolerable: what you are left with is a
-        vault that validates, not a broken one."""
+        vault that validates, not a broken one.
+        """
         from planner.service.notes import NoteService
 
         service = NoteService(repo)
         service.create(kind="task", title="T", priority=1)
         original = repo.find("T").read_bytes()
 
-        Journal(repo.root).record(Entry(
-            "Items/T.md", digest(original), digest(b"whatever"), original.decode()))
+        Journal(repo.root).record(
+            Entry(
+                "Items/T.md", digest(original), digest(b"whatever"), original.decode()
+            )
+        )
         repo.find("T").write_bytes(b"whatever")
 
         MarkdownNoteRepository(repo.root).recover()
@@ -313,9 +341,11 @@ class TestCommitRecordWindow:
         assert service.get("T").fields["priority"] == 1
 
     def test_clearing_happens_after_the_writes_so_the_window_is_as_small_as_possible(
-            self, repo):
+        self, repo
+    ):
         """It cannot be eliminated, only narrowed: the journal is cleared once, at the
-        end, rather than progressively as commands land."""
+        end, rather than progressively as commands land.
+        """
         seen = []
         real_clear = repo.journal.clear
 
@@ -327,14 +357,16 @@ class TestCommitRecordWindow:
         with repo.unit_of_work():
             repo.save(Note(kind="task", title="One"))
             repo.save(Note(kind="task", title="Two"))
-        assert seen == [True]        # every write had landed before the single clear
+        assert seen == [True]  # every write had landed before the single clear
 
 
 class TestBrokenRollbackWithoutADatabase:
     def test_the_file_journal_can_only_shout(self, tmp_path, caplog):
         """It keeps nothing after a transaction, so a mixed state cannot be recorded
-        here -- which is one of the things the Postgres backend is for."""
+        here -- which is one of the things the Postgres backend is for.
+        """
         import logging
+
         journal = Journal(tmp_path)
         with caplog.at_level(logging.ERROR, logger="planner.repository"):
             journal.conflicted(["Items/T.md"])

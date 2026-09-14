@@ -10,15 +10,42 @@ an internal concern.
 from __future__ import annotations
 
 from .fields import (  # noqa: F401
-    CHECKBOX, DATE, DATE_FIELDS, FIELD_TYPES, LINK, LINK_FIELDS, LINK_LIST,
-    LINK_LIST_FIELDS, LIST_FIELDS, NUMBER, TEXT, TEXT_LIST,
+    CHECKBOX,
+    DATE,
+    DATE_FIELDS,
+    FIELD_TYPES,
+    LINK,
+    LINK_FIELDS,
+    LINK_LIST,
+    LINK_LIST_FIELDS,
+    LIST_FIELDS,
+    NUMBER,
+    TEXT,
+    TEXT_LIST,
 )
 from .kinds import (  # noqa: F401
-    KIND_NAMES, KINDS, SHARED, TICKET_KINDS, Kind, KindEnum, allowed_fields,
+    KIND_NAMES,
+    KINDS,
+    SHARED,
+    TICKET_KINDS,
+    Kind,
+    KindEnum,
+    allowed_fields,
     folder_for,
 )
 from .vocabularies import (  # noqa: F401
-    ALL_STATUS, CLOSED_STATUS, CONTAINER_STATUS, DECISION_STATUS, DOC_STATUS,
-    ISSUE_TYPE, PRIORITY_RANGE, RECUR, ROUTINE_STATUS, TICKET_STATUS,
-    ClosingStatusEnum, IssueTypeEnum, RecurEnum, StatusEnum,
+    ALL_STATUS,
+    CLOSED_STATUS,
+    CONTAINER_STATUS,
+    DECISION_STATUS,
+    DOC_STATUS,
+    ISSUE_TYPE,
+    PRIORITY_RANGE,
+    RECUR,
+    ROUTINE_STATUS,
+    TICKET_STATUS,
+    ClosingStatusEnum,
+    IssueTypeEnum,
+    RecurEnum,
+    StatusEnum,
 )

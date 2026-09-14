@@ -10,7 +10,8 @@ unwrapping happens here, at the boundary, and nowhere else.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
+from dataclasses import field as dc_field
 from datetime import date
 
 import yaml
@@ -45,11 +46,15 @@ def _as_date(value, field):
     try:
         return date.fromisoformat(str(value))
     except ValueError as exc:
-        raise ValidationError(f"{field}: {value!r} is not a YYYY-MM-DD date", field) from exc
+        raise ValidationError(
+            f"{field}: {value!r} is not a YYYY-MM-DD date", field
+        ) from exc
 
 
 @dataclass
 class Note:
+    """One note, in memory."""
+
     kind: str
     title: str
     fields: dict = dc_field(default_factory=dict)
@@ -72,15 +77,15 @@ class Note:
             elif key in schema.LINK_FIELDS:
                 self.fields[key] = unwrap_link(value)
             elif key in schema.LIST_FIELDS:
-                if isinstance(value, str):
-                    value = [value]
-                self.fields[key] = [unwrap_link(v) for v in value]
+                items = [value] if isinstance(value, str) else value
+                self.fields[key] = [unwrap_link(v) for v in items]
             elif key == "priority" and value is not None:
                 try:
                     self.fields[key] = int(value)
                 except (TypeError, ValueError) as exc:
-                    raise ValidationError(f"priority: {value!r} is not a number",
-                                          "priority") from exc
+                    raise ValidationError(
+                        f"priority: {value!r} is not a number", "priority"
+                    ) from exc
 
     # --- validation ---------------------------------------------------------------
 
@@ -98,38 +103,46 @@ class Note:
             for key in self.fields:
                 if key not in allowed:
                     raise ValidationError(
-                        f"{key!r} is not a field of kind {self.kind!r}", key)
+                        f"{key!r} is not a field of kind {self.kind!r}", key
+                    )
 
         status = self.fields.get("status")
         if spec.statuses:
             if status is not None and status not in spec.statuses:
                 raise ValidationError(
-                    f"status {status!r} not one of {list(spec.statuses)}", "status")
+                    f"status {status!r} not one of {list(spec.statuses)}", "status"
+                )
         elif status is not None:
             raise ValidationError(f"kind {self.kind!r} has no status", "status")
 
         issue_type = self.fields.get("type")
         if issue_type is not None and issue_type not in schema.ISSUE_TYPE:
             raise ValidationError(
-                f"type {issue_type!r} not one of {list(schema.ISSUE_TYPE)}", "type")
+                f"type {issue_type!r} not one of {list(schema.ISSUE_TYPE)}", "type"
+            )
 
         recur = self.fields.get("recur")
         if recur is not None and recur not in schema.RECUR:
             raise ValidationError(
-                f"recur {recur!r} not one of {list(schema.RECUR)}", "recur")
+                f"recur {recur!r} not one of {list(schema.RECUR)}", "recur"
+            )
 
         priority = self.fields.get("priority")
         if priority is not None:
             low, high = schema.PRIORITY_RANGE
             if not low <= priority <= high:
                 raise ValidationError(
-                    f"priority {priority} outside {low}-{high}", "priority")
+                    f"priority {priority} outside {low}-{high}", "priority"
+                )
         return self
 
     @property
     def is_open(self):
-        """Mirrors the `open` formula in the bases: the checkbox and the status are
-        additive, so ticking either closes the ticket."""
+        """Whether this note still counts as open.
+
+        Mirrors the `open` formula in the bases: the checkbox and the status are
+        additive, so ticking either one closes the ticket.
+        """
         if self.fields.get("done") is True:
             return False
         return self.fields.get("status") not in schema.CLOSED_STATUS
@@ -138,11 +151,14 @@ class Note:
 
     @classmethod
     def from_markdown(cls, text, title):
+        """Parse a note from the text of its file."""
         m = FRONTMATTER_RE.match(text)
         if not m:
             # Obsidian only recognises frontmatter at byte 0; anything else is a note
             # with no properties at all, which is a real state Triage reports on.
-            raise ValidationError(f"{title!r} has no frontmatter at the start of the file")
+            raise ValidationError(
+                f"{title!r} has no frontmatter at the start of the file"
+            )
         data = yaml.safe_load(m.group("yaml")) or {}
         if not isinstance(data, dict):
             raise ValidationError(f"{title!r} frontmatter is not a mapping")
@@ -152,6 +168,7 @@ class Note:
         return cls(kind=kind, title=title, fields=data, body=m.group("body"))
 
     def to_markdown(self):
+        """Serialise to the exact bytes that belong on disk."""
         spec = schema.KINDS[self.kind]
         out = {"kind": self.kind, "icon": spec.icon, "iconColor": spec.colour}
         # Deterministic order: shared identity first, then the kind's own fields in
@@ -181,8 +198,9 @@ class Note:
             values = value or []
             if not values:
                 return f"{key}: []"
-            wrapped = [wrap_link(v) if key in schema.LINK_LIST_FIELDS else v
-                       for v in values]
+            wrapped = [
+                wrap_link(v) if key in schema.LINK_LIST_FIELDS else v for v in values
+            ]
             return f"{key}:\n" + "\n".join(f'  - "{v}"' for v in wrapped)
         if key in schema.LINK_FIELDS:
             return f'{key}: "{wrap_link(value)}"'
@@ -207,6 +225,7 @@ class Note:
 
     @classmethod
     def from_dict(cls, data):
+        """Build a note from a JSON-shaped mapping, as the API receives it."""
         data = dict(data)
         kind = data.pop("kind", None)
         title = data.pop("title", None)

@@ -189,6 +189,29 @@ A test runs `--check`, so prose that has fallen behind the code fails the suite 
 than being believed by a reader. This was not hypothetical: when it was added the README
 listed seven endpoints against twelve in the routing table.
 
+### Style
+
+Ruff, as both formatter and linter, configured in `pyproject.toml`.
+
+```sh
+make lint     # check formatting and rules, changing nothing
+make fmt      # format, and apply every safe fix
+make check    # lint + tests + docs-check, i.e. everything CI would run
+```
+
+On the question of a "corporate standard": Airbnb's style guide is JavaScript and Ruby
+with no Python equivalent, and Meta's public position amounts to "use Black". The one
+published Python standard from a large shop is Google's, so the rule selection starts
+there and adds the checks that catch bugs rather than settle arguments. Line length is
+88 rather than Google's 80 — the prose here is already hand-wrapped to 88, and rewrapping
+several thousand lines of deliberate paragraphing to gain eight characters is a large
+diff for no reading benefit.
+
+Every suppression carries its reason inline. Several are not preference but necessity:
+`B008` forbids the call-in-default that FastAPI's `Depends()` *requires*; `N802` would
+rename tests away from the invariant identifiers that make a failure legible; `PLC0415`
+would force the lazy MCP import that keeps the SDK optional up to module scope.
+
 ### Tests and coverage
 
 Test files are named for the module they cover and mirror the source tree:

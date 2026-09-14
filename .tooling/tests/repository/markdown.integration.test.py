@@ -7,14 +7,16 @@ placement follows kind, and that a half-written file does not break a listing.
 
 import pytest
 
-from planner.domain.errors import NoteNotFound
+from planner.domain.errors import NoteNotFoundError
 from planner.domain.note import Note
 from planner.domain.schema import KINDS
 from planner.repository.markdown import CONTENT_FOLDERS, MarkdownNoteRepository
 
 
 class TestPlacement:
-    @pytest.mark.parametrize("kind,folder", [(k.name, k.folder) for k in KINDS.values()])
+    @pytest.mark.parametrize(
+        "kind,folder", [(k.name, k.folder) for k in KINDS.values()]
+    )
     def test_folder_is_derived_from_kind(self, repo, kind, folder):
         repo.save(Note(kind=kind, title=f"A {kind}"))
         assert (repo.root / folder / f"A {kind}.md").is_file()
@@ -53,7 +55,8 @@ class TestFind:
     def test_exists_is_as_case_sensitive_as_the_filesystem(self, repo, tmp_path):
         """Not a guarantee this layer makes. macOS is case-insensitive by default and
         Linux is not, so `exists("t")` for a file named T.md differs by machine. The
-        service does not rely on it -- uniqueness is checked with casefold there."""
+        service does not rely on it -- uniqueness is checked with casefold there.
+        """
         repo.save(Note(kind="task", title="T"))
         probe = tmp_path / "CaseProbe"
         probe.write_text("x")
@@ -63,14 +66,16 @@ class TestFind:
     def test_find_falls_back_to_a_case_insensitive_scan(self, repo):
         """So lookup does not depend on the filesystem. On a case-sensitive volume the
         exact-path probe misses and this fallback is what answers; on macOS the probe
-        already matched. Either way the application decides, not the disk."""
+        already matched. Either way the application decides, not the disk.
+        """
         repo.save(Note(kind="task", title="MixedCase Title"))
         assert repo.find("mixedcase title") is not None
 
     def test_find_returns_the_stored_spelling_not_the_requested_one(self, repo):
         """On a case-insensitive volume the exact-path probe matches a differently
         cased file, and Path.stem would echo the caller's spelling -- yielding a title
-        no note has, which would then 409 as a case clash if fed back."""
+        no note has, which would then 409 as a case clash if fed back.
+        """
         repo.save(Note(kind="task", title="MixedCase Title"))
         for spelling in ("mixedcase title", "MIXEDCASE TITLE", "MixedCase Title"):
             assert repo.find(spelling).stem == "MixedCase Title"
@@ -82,7 +87,8 @@ class TestFind:
     def test_scan_finds_by_case_regardless_of_filesystem(self, repo):
         """The branch that only executes on a case-sensitive volume. macOS matches on
         the exact-path probe first, so exercising it directly is the only way to cover
-        it on a developer machine as well as in production."""
+        it on a developer machine as well as in production.
+        """
         repo.save(Note(kind="task", title="MixedCase Title"))
         assert repo._scan_for("mixedcase title").stem == "MixedCase Title"
         assert repo._scan_for("nothing here") is None
@@ -99,15 +105,20 @@ class TestFind:
     def test_searches_every_content_folder(self, repo):
         for folder in CONTENT_FOLDERS:
             (repo.root / folder / f"In {folder}.md").write_text(
-                Note(kind="task", title=f"In {folder}").to_markdown())
+                Note(kind="task", title=f"In {folder}").to_markdown()
+            )
         for folder in CONTENT_FOLDERS:
             assert repo.exists(f"In {folder}")
 
 
 class TestRoundTrip:
     def test_note_survives_disk(self, repo):
-        original = Note(kind="task", title="T", fields={
-            "status": "blocked", "priority": 2, "blocked_by": ["A"]}, body="\n# T\n\nX\n")
+        original = Note(
+            kind="task",
+            title="T",
+            fields={"status": "blocked", "priority": 2, "blocked_by": ["A"]},
+            body="\n# T\n\nX\n",
+        )
         repo.save(original)
         back = repo.get("T")
         assert back.kind == "task"
@@ -116,14 +127,15 @@ class TestRoundTrip:
         assert "X" in back.body
 
     def test_get_missing_raises(self, repo):
-        with pytest.raises(NoteNotFound):
+        with pytest.raises(NoteNotFoundError):
             repo.get("Nope")
 
 
 class TestIteration:
     def test_iter_all_skips_unreadable(self, repo):
         """A vault is hand-editable text and Obsidian writes to it too, so a file may
-        be mid-edit. One bad note must not take down a listing."""
+        be mid-edit. One bad note must not take down a listing.
+        """
         repo.save(Note(kind="task", title="Good"))
         (repo.root / "Items" / "Bad.md").write_text("no frontmatter here")
         assert [n.title for n in repo.iter_all()] == ["Good"]
@@ -155,7 +167,7 @@ class TestDelete:
         assert not repo.exists("T")
 
     def test_missing_raises(self, repo):
-        with pytest.raises(NoteNotFound):
+        with pytest.raises(NoteNotFoundError):
             repo.delete("Nope")
 
 
@@ -163,6 +175,7 @@ class TestRootHandling:
     def test_names_in_tolerates_a_missing_directory(self, tmp_path):
         """find() probes folders that a fresh clone may not have yet."""
         from planner.repository.markdown import _names_in
+
         assert _names_in(tmp_path / "absent") == set()
 
     def test_accepts_a_string_path(self, tmp_path):

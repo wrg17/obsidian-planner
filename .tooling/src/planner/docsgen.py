@@ -55,10 +55,13 @@ STYLES = {
 
 MARKER = re.compile(
     r"(?:<!-- generated:(?P<html>[\w-]+) -->.*?<!-- /generated:(?P=html) -->)"
-    r"|(?:%%generated:(?P<obs>[\w-]+)%%.*?%%/generated:(?P=obs)%%)", re.S)
+    r"|(?:%%generated:(?P<obs>[\w-]+)%%.*?%%/generated:(?P=obs)%%)",
+    re.S,
+)
 
 
 # --- the generated sections ---------------------------------------------------------
+
 
 def endpoints() -> str:
     """The routing table, as the README's API reference.
@@ -80,15 +83,16 @@ def layers() -> str:
     described = {
         "domain": "entities, vocabularies, validation — no IO, no framework",
         "repository": "persistence port, markdown adapter, reversible commands, "
-                      "unit of work, journals",
+        "unit of work, journals",
         "service": "business rules, transport-agnostic",
         "contracts": "wire shapes shared by every transport",
         "api": "FastAPI: routes, middleware, controllers, DTOs",
         "mcp": "MCP tools over the same service",
     }
     src = REPO / ".tooling" / "src" / "planner"
-    present = [d.name for d in sorted(src.iterdir())
-               if d.is_dir() and d.name in described]
+    present = [
+        d.name for d in sorted(src.iterdir()) if d.is_dir() and d.name in described
+    ]
     width = max(len(name) for name in present) + 2
     body = "\n".join(f"{name + '/':<{width}} {described[name]}" for name in present)
     return "```\n" + body + "\n```"
@@ -106,11 +110,15 @@ def vocabularies() -> str:
         ("Recurrence", S.RECUR),
     ]
     lines = ["| | |", "|---|---|"]
-    lines += [f"| **{name}** | {' · '.join(f'`{v}`' for v in values)} |"
-              for name, values in rows]
+    lines += [
+        f"| **{name}** | {' · '.join(f'`{v}`' for v in values)} |"
+        for name, values in rows
+    ]
     low, high = S.PRIORITY_RANGE
-    lines.append(f"| **Priority** | `{low}` (highest) … `{high}` — a number, so it "
-                 f"sorts correctly |")
+    lines.append(
+        f"| **Priority** | `{low}` (highest) … `{high}` — a number, so it "
+        f"sorts correctly |"
+    )
     return "\n".join(lines)
 
 
@@ -119,8 +127,11 @@ def kinds() -> str:
     lines = ["| Kind | Folder | Own fields |", "|---|---|---|"]
     for kind in S.KINDS.values():
         own = [f for f in S.allowed_fields(kind.name) if f not in S.SHARED]
-        lines.append(f"| `{kind.name}` | `{kind.folder}/` | "
-                     + (", ".join(f"`{f}`" for f in own) or "—") + " |")
+        lines.append(
+            f"| `{kind.name}` | `{kind.folder}/` | "
+            + (", ".join(f"`{f}`" for f in own) or "—")
+            + " |"
+        )
     return "\n".join(lines)
 
 
@@ -144,10 +155,12 @@ TEMPLATE_HEADER = re.compile(r"\A<!--.*?-->\s*", re.S)
 
 
 def render_template(text: str) -> str:
+    """Render a template whole, dropping its markers and its editor note."""
     return render(TEMPLATE_HEADER.sub("", text), keep_markers=False)
 
 
 # --- rendering ----------------------------------------------------------------------
+
 
 def render(text: str, *, keep_markers: bool = True) -> str:
     """Replace every delimited section, leaving the prose around it alone.
@@ -156,6 +169,7 @@ def render(text: str, *, keep_markers: bool = True) -> str:
     whole from a template -- the reader of that file never edits it, so a marker would
     be noise, and in Obsidian it would be *visible* noise.
     """
+
     def substitute(match):
         style = "html" if match.group("html") else "obsidian"
         name = match.group("html") or match.group("obs")
@@ -168,9 +182,13 @@ def render(text: str, *, keep_markers: bool = True) -> str:
         # preceded by one or the parser folds it into the previous paragraph and
         # renders it as literal pipes -- which is what happened when the marker sat
         # directly above the table in System.md.
-        return (opening.format(name=name) + "\n\n"
-                + SECTIONS[name]()
-                + "\n\n" + closing.format(name=name))
+        return (
+            opening.format(name=name)
+            + "\n\n"
+            + SECTIONS[name]()
+            + "\n\n"
+            + closing.format(name=name)
+        )
 
     return MARKER.sub(substitute, text)
 
@@ -187,7 +205,7 @@ def stale(root: Path | None = None) -> list[str]:
     for name in FILES:
         path = root / name
         if not path.exists():
-            continue                # a file may legitimately not carry any markers
+            continue  # a file may legitimately not carry any markers
         current = path.read_text()
         if render(current) != current:
             out.append(name)
@@ -226,6 +244,7 @@ def write(root: Path | None = None) -> list[str]:
 
 
 def main(argv=None) -> int:  # pragma: no cover - exercised through the functions above
+    """Command line entry point: --check to verify, --write to regenerate."""
     argv = argv if argv is not None else sys.argv[1:]
     if "--write" in argv:
         changed = write()

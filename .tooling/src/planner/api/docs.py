@@ -48,7 +48,8 @@ METHOD_COLOURS = {
 
 
 def _method_rules() -> str:
-    return "\n".join(f"""
+    return "\n".join(
+        f"""
 .swagger-ui .opblock.opblock-{method} {{
   background: rgba(68, 71, 90, .35);
   border-color: {colour};
@@ -62,7 +63,9 @@ def _method_rules() -> str:
 }}
 .swagger-ui .opblock.opblock-{method} .tab-header .tab-item.active h4 span::after {{
   background: {colour};
-}}""" for method, colour in METHOD_COLOURS.items())
+}}"""
+        for method, colour in METHOD_COLOURS.items()
+    )
 
 
 DRACULA_CSS = f"""
@@ -266,8 +269,9 @@ def swagger_ui(*, openapi_url: str, title: str) -> HTMLResponse:
     layout, and reimplementing that to change colours would be a far larger thing to
     keep working across upgrades.
     """
-    page = get_swagger_ui_html(openapi_url=openapi_url, title=title,
-                               swagger_favicon_url=FAVICON)
+    page = get_swagger_ui_html(
+        openapi_url=openapi_url, title=title, swagger_favicon_url=FAVICON
+    )
     html = page.body.decode()
     html = html.replace("</head>", f"<style>{DRACULA_CSS}</style></head>")
     return HTMLResponse(html)

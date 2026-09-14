@@ -18,16 +18,18 @@ class TestTheTableIsComplete:
 
     def test_every_served_route_is_declared(self, client):
         """The inverse, and the one that matters: an endpoint registered somewhere
-        else would be invisible to anyone reading this file."""
+        else would be invisible to anyone reading this file.
+        """
         documented = {r.path for r in ROUTES}
-        served = {p for p in client.get("/openapi.json").json()["paths"]}
+        served = set(client.get("/openapi.json").json()["paths"])
         assert served - documented == set()
 
     def test_methods_match(self, client):
         paths = client.get("/openapi.json").json()["paths"]
         for route in ROUTES:
-            assert route.method.lower() in paths[route.path], \
+            assert route.method.lower() in paths[route.path], (
                 f"{route.method} {route.path} declared but not served"
+            )
 
     def test_no_duplicate_method_and_path(self):
         pairs = [(r.method, r.path) for r in ROUTES]
@@ -59,7 +61,8 @@ class TestMetadata:
     @pytest.mark.parametrize("route", ROUTES, ids=lambda r: f"{r.method} {r.path}")
     def test_the_handler_points_at_the_contract(self, route):
         """A developer who opens the handler should be told where the rules are rather
-        than left to discover that the docstring is only half the story."""
+        than left to discover that the docstring is only half the story.
+        """
         doc = route.handler.__doc__ or ""
         assert "contracts/operations.py" in doc
 
@@ -73,23 +76,30 @@ class TestMetadata:
         paths = client.get("/openapi.json").json()["paths"]
         for route in ROUTES:
             if "{title}" in route.path:
-                assert "404" in paths[route.path][route.method.lower()]["responses"], \
+                assert "404" in paths[route.path][route.method.lower()]["responses"], (
                     f"{route.method} {route.path}"
+                )
 
     def test_status_codes_are_what_the_server_returns(self, client):
-        assert client.post("/notes", json={"kind": "task", "title": "RT"}).status_code \
-            == next(r.status_code for r in ROUTES
-                    if r.method == "POST" and r.path == "/notes")
-        assert client.delete("/notes/RT").status_code \
-            == next(r.status_code for r in ROUTES
-                    if r.method == "DELETE" and r.path == "/notes/{title}")
+        assert client.post(
+            "/notes", json={"kind": "task", "title": "RT"}
+        ).status_code == next(
+            r.status_code for r in ROUTES if r.method == "POST" and r.path == "/notes"
+        )
+        assert client.delete("/notes/RT").status_code == next(
+            r.status_code
+            for r in ROUTES
+            if r.method == "DELETE" and r.path == "/notes/{title}"
+        )
 
 
 class TestHandlersAreDecoupled:
     def test_handlers_declare_no_routes_of_their_own(self):
         """The point of the split: a handler that carried its own decorator would be
-        reachable without appearing in the table."""
+        reachable without appearing in the table.
+        """
         import inspect
+
         from planner.api.handlers import meta, notes
 
         for module in (notes, meta):
@@ -110,19 +120,22 @@ class TestTheDocsAreNotDuplicated:
     """The invariants were extracted into contracts/operations.py and the handler
     docstrings kept a byte-identical copy for several commits. Nothing read it, and it
     had not drifted yet -- but two copies of twelve paragraphs is a drift waiting for
-    the first person who edits the one they happened to open."""
+    the first person who edits the one they happened to open.
+    """
 
     @pytest.mark.parametrize("route", ROUTES, ids=lambda r: f"{r.method} {r.path}")
     def test_the_handler_does_not_restate_the_invariants(self, route):
         doc = route.handler.__doc__ or ""
         assert "INVARIANTS\n" not in doc, (
             f"{route.method} {route.path}: the invariants belong in "
-            "contracts/operations.py, which is what both transports publish")
+            "contracts/operations.py, which is what both transports publish"
+        )
 
     @pytest.mark.parametrize("route", ROUTES, ids=lambda r: f"{r.method} {r.path}")
     def test_the_handler_docstring_stays_short(self, route):
         """A pointer, not a second contract. The threshold is arbitrary; exceeding it
-        means prose is accumulating somewhere nothing reads."""
+        means prose is accumulating somewhere nothing reads.
+        """
         assert len(route.handler.__doc__ or "") < 500
 
     def test_the_published_text_comes_from_contracts_alone(self):
@@ -130,4 +143,6 @@ class TestTheDocsAreNotDuplicated:
         from planner.contracts.operations import OPERATIONS
 
         for route in ROUTES:
-            assert route.description == OPERATIONS[(route.method, route.path)].description
+            assert (
+                route.description == OPERATIONS[(route.method, route.path)].description
+            )

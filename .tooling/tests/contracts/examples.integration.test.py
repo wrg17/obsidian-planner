@@ -14,7 +14,7 @@ import sys
 import pytest
 
 from planner.contracts.note import CREATE_EXAMPLE, NoteIn
-from planner.contracts.operations import DEMO, OPERATIONS
+from planner.contracts.operations import DEMO
 
 
 def _demo_module():
@@ -30,8 +30,7 @@ def _demo_module():
 @pytest.fixture(scope="module")
 def demo_titles():
     module = _demo_module()
-    titles = {title for _folder, title, _fields, _body in module.NOTES}
-    return titles
+    return {title for _folder, title, _fields, _body in module.NOTES}
 
 
 @pytest.fixture(scope="module")
@@ -41,45 +40,57 @@ def demo_notes():
 
 
 class TestTheExamplesResolve:
-    @pytest.mark.parametrize("name,value", [
-        (n, v) for n, v in DEMO.items() if n != "new_title"])
-    def test_every_named_example_is_a_note_the_demo_creates(self, name, value,
-                                                            demo_titles):
+    @pytest.mark.parametrize(
+        "name,value", [(n, v) for n, v in DEMO.items() if n != "new_title"]
+    )
+    def test_every_named_example_is_a_note_the_demo_creates(
+        self, name, value, demo_titles
+    ):
         assert value in demo_titles, f"DEMO[{name!r}] = {value!r} is not generated"
 
     def test_the_create_example_uses_a_title_that_does_not_exist(self, demo_titles):
         """It would 409 on the first click otherwise, which teaches the wrong lesson
-        about the endpoint."""
+        about the endpoint.
+        """
         assert DEMO["new_title"] not in demo_titles
 
     def test_the_parent_example_actually_has_children(self, demo_notes):
         """GET /notes/{title}/children returning [] would look broken."""
-        children = [t for t, f in demo_notes.items()
-                    if f.get("parent") == f"[[{DEMO['parent']}]]"]
+        children = [
+            t
+            for t, f in demo_notes.items()
+            if f.get("parent") == f"[[{DEMO['parent']}]]"
+        ]
         assert children, f"{DEMO['parent']!r} has no children in the demo data"
 
     def test_the_task_example_is_a_ticket(self):
-        """close and reopen use it, and only tickets track completion."""
+        """Close and reopen use it, and only tickets track completion."""
         from planner.domain import schema as S
+
         assert "task" in S.TICKET_KINDS
 
     def test_the_task_example_has_children(self, demo_notes):
         """GET /notes/{title}/children and the subtask relationship both want one
-        that does."""
-        children = [t for t, f in demo_notes.items()
-                    if f.get("parent") == f"[[{DEMO['task']}]]"]
+        that does.
+        """
+        children = [
+            t for t, f in demo_notes.items() if f.get("parent") == f"[[{DEMO['task']}]]"
+        ]
         assert children
 
     def test_the_delete_example_is_a_leaf(self, demo_notes):
         """A note with children is refused, so using one would show a reader the guard
-        rail rather than the endpoint. Hence a second example for delete."""
-        children = [t for t, f in demo_notes.items()
-                    if f.get("parent") == f"[[{DEMO['leaf']}]]"]
+        rail rather than the endpoint. Hence a second example for delete.
+        """
+        children = [
+            t for t, f in demo_notes.items() if f.get("parent") == f"[[{DEMO['leaf']}]]"
+        ]
         assert not children
 
     def test_the_delete_example_is_not_the_one_other_endpoints_use(self):
         """Sharing it would mean a reader who tried DELETE first found every other
-        example broken."""
+        example broken.
+        """
         assert DEMO["leaf"] != DEMO["task"]
 
 
@@ -92,11 +103,13 @@ class TestTheCreateExampleIsValid:
 
     def test_the_parent_may_hold_a_task(self, demo_notes):
         from planner.domain import schema as S
+
         parent_kind = demo_notes[CREATE_EXAMPLE["parent"]]["kind"]
         assert parent_kind in S.KINDS["task"].parent_kinds
 
     def test_every_field_it_sets_is_legal_for_the_kind(self):
         from planner.domain import schema as S
+
         allowed = set(S.allowed_fields(CREATE_EXAMPLE["kind"]))
         assert set(CREATE_EXAMPLE) - {"title"} <= allowed
 
@@ -106,11 +119,17 @@ class TestTheyReachSwagger:
         schema = client.get("/openapi.json").json()["components"]["schemas"]["NoteIn"]
         assert schema["examples"][0]["title"] == DEMO["new_title"]
 
-    @pytest.mark.parametrize("path,method", [
-        ("/notes/{title}", "get"), ("/notes/{title}", "patch"),
-        ("/notes/{title}", "delete"), ("/notes/{title}/children", "get"),
-        ("/notes/{title}/close", "post"), ("/notes/{title}/reopen", "post"),
-    ])
+    @pytest.mark.parametrize(
+        "path,method",
+        [
+            ("/notes/{title}", "get"),
+            ("/notes/{title}", "patch"),
+            ("/notes/{title}", "delete"),
+            ("/notes/{title}/children", "get"),
+            ("/notes/{title}/close", "post"),
+            ("/notes/{title}/reopen", "post"),
+        ],
+    )
     def test_every_title_parameter_is_pre_filled(self, client, path, method):
         operation = client.get("/openapi.json").json()["paths"][path][method]
         title = next(p for p in operation["parameters"] if p["name"] == "title")
@@ -119,8 +138,11 @@ class TestTheyReachSwagger:
 
     def test_the_listing_filters_are_pre_filled(self, client):
         operation = client.get("/openapi.json").json()["paths"]["/notes"]["get"]
-        filled = {p["name"] for p in operation["parameters"]
-                  if p.get("examples") or p["schema"].get("examples")}
+        filled = {
+            p["name"]
+            for p in operation["parameters"]
+            if p.get("examples") or p["schema"].get("examples")
+        }
         assert {"project", "parent"} <= filled
 
 

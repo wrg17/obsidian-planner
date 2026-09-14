@@ -9,7 +9,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from planner.domain.errors import NoteNotFound
+from planner.domain.errors import NoteNotFoundError
 from planner.repository.base import NoteRepository
 from planner.repository.markdown import MarkdownNoteRepository
 
@@ -19,7 +19,6 @@ class InMemoryRepository:
 
     def __init__(self):
         self.saved = {}
-
 
     def conflicted(self, paths):
         pass
@@ -36,7 +35,8 @@ class InMemoryRepository:
 
         Trivial for a dict, and that is the point: the port asks for all-or-nothing,
         not for compensating commands. A backend with real transactions would use
-        them here."""
+        them here.
+        """
         saved = dict(self.saved)
         try:
             yield self
@@ -46,7 +46,7 @@ class InMemoryRepository:
 
     def get(self, title):
         if title not in self.saved:
-            raise NoteNotFound(f"no note titled {title!r}")
+            raise NoteNotFoundError(f"no note titled {title!r}")
         return self.saved[title]
 
     def exists(self, title):
@@ -67,7 +67,7 @@ class InMemoryRepository:
 
     def delete(self, title):
         if title not in self.saved:
-            raise NoteNotFound(title)
+            raise NoteNotFoundError(title)
         del self.saved[title]
 
 
@@ -81,7 +81,9 @@ class TestConformance:
     def test_widening_the_port_breaks_stale_doubles(self):
         """The value of a runtime-checkable Protocol: when `titles` was added for the
         case-insensitive uniqueness check, every incomplete implementation failed
-        immediately instead of at the first call."""
+        immediately instead of at the first call.
+        """
+
         class Stale(InMemoryRepository):
             titles = None
 
@@ -94,9 +96,21 @@ class TestConformance:
 
         assert not isinstance(Missing(), NoteRepository)
 
-    @pytest.mark.parametrize("method", [
-        "get", "exists", "titles", "iter_all", "iter_raw", "save", "delete",
-        "unit_of_work", "has_pending_transaction", "describe"])
+    @pytest.mark.parametrize(
+        "method",
+        [
+            "get",
+            "exists",
+            "titles",
+            "iter_all",
+            "iter_raw",
+            "save",
+            "delete",
+            "unit_of_work",
+            "has_pending_transaction",
+            "describe",
+        ],
+    )
     def test_port_declares_the_whole_surface(self, method):
         assert hasattr(NoteRepository, method)
 

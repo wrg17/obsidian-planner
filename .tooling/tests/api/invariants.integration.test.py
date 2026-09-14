@@ -29,12 +29,14 @@ class TestTheRecords:
     @pytest.mark.parametrize("invariant", INVARIANTS, ids=lambda i: i.id)
     def test_each_says_whether_it_is_promised_or_merely_detected(self, invariant):
         """The distinction the whole design turns on: what this API will never do,
-        versus what it will tell you about once someone else has."""
+        versus what it will tell you about once someone else has.
+        """
         assert invariant.kind in ("guarantee", "detection")
 
     def test_the_summary_is_shorter_than_the_rationale(self):
         """One is a table cell, the other is the reasoning. If they are the same
-        length, one of them is wrong."""
+        length, one of them is wrong.
+        """
         for invariant in INVARIANTS:
             assert len(invariant.summary) < len(invariant.rationale)
 
@@ -62,7 +64,8 @@ class TestBothRenderingsComeFromTheRecords:
 
     def test_both_renderings_stay_in_step(self):
         """The property that makes this worth doing: one record, two forms, no way for
-        them to disagree about which invariants exist."""
+        them to disagree about which invariants exist.
+        """
         in_table = set(re.findall(r"\*\*(S\d)\*\*", as_markdown_table()))
         in_prose = set(re.findall(r"^(S\d)\.", as_prose(), re.M))
         assert in_table == in_prose == {i.id for i in INVARIANTS}
@@ -71,7 +74,8 @@ class TestBothRenderingsComeFromTheRecords:
 class TestTheyReachTheClient:
     def test_the_published_description_carries_the_table(self, client):
         """A client author should not have to read the source to learn what this API
-        promises."""
+        promises.
+        """
         description = client.get("/openapi.json").json()["info"]["description"]
         for invariant in INVARIANTS:
             assert f"**{invariant.id}**" in description
@@ -87,11 +91,13 @@ class TestTheyReachTheClient:
 
     def test_app_no_longer_restates_them(self):
         """The duplication this file exists to remove: app.py must not carry a second
-        copy that can drift from this one."""
+        copy that can drift from this one.
+        """
         import inspect
         import sys
 
         import planner.api.app  # noqa: F401
+
         source = inspect.getsource(sys.modules["planner.api.app"])
         # A stray `S4. ONE ERROR SHAPE` style heading would mean the prose came back.
         assert not re.findall(r"^S\d\. [A-Z]", source, re.M)
@@ -117,5 +123,6 @@ class TestEndpointsReferToThem:
 
         for key, operation in OPERATIONS.items():
             for match in re.findall(r"\bS(\d)\b", operation.invariants):
-                assert f"S{match}" in BY_ID, \
+                assert f"S{match}" in BY_ID, (
                     f"{key} cites S{match}, which is not defined"
+                )

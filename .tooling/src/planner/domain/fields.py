@@ -16,20 +16,39 @@ from __future__ import annotations
 # --- field types ------------------------------------------------------------------
 
 TEXT, DATE, NUMBER, CHECKBOX, LINK, LINK_LIST, TEXT_LIST = (
-    "text", "date", "number", "checkbox", "link", "link_list", "text_list",
+    "text",
+    "date",
+    "number",
+    "checkbox",
+    "link",
+    "link_list",
+    "text_list",
 )
 
 #: Property name -> Obsidian property type, mirroring .obsidian/types.json. Kept here
 #: as well so the API can coerce and validate without reading app-owned config.
 FIELD_TYPES = {
-    "kind": TEXT, "status": TEXT, "type": TEXT, "recur": TEXT, "week": TEXT,
-    "icon": TEXT, "iconColor": TEXT,
+    "kind": TEXT,
+    "status": TEXT,
+    "type": TEXT,
+    "recur": TEXT,
+    "week": TEXT,
+    "icon": TEXT,
+    "iconColor": TEXT,
     "priority": NUMBER,
     "done": CHECKBOX,
-    "due": DATE, "scheduled": DATE, "closed": DATE, "last_done": DATE,
-    "created": DATE, "date": DATE,
-    "parent": LINK, "project": LINK, "area": LINK,
-    "blocked_by": LINK_LIST, "supersedes": LINK_LIST, "attendees": TEXT_LIST,
+    "due": DATE,
+    "scheduled": DATE,
+    "closed": DATE,
+    "last_done": DATE,
+    "created": DATE,
+    "date": DATE,
+    "parent": LINK,
+    "project": LINK,
+    "area": LINK,
+    "blocked_by": LINK_LIST,
+    "supersedes": LINK_LIST,
+    "attendees": TEXT_LIST,
     "demo": CHECKBOX,
 }
 
@@ -37,5 +56,3 @@ LINK_FIELDS = {k for k, v in FIELD_TYPES.items() if v == LINK}
 LINK_LIST_FIELDS = {k for k, v in FIELD_TYPES.items() if v == LINK_LIST}
 DATE_FIELDS = {k for k, v in FIELD_TYPES.items() if v == DATE}
 LIST_FIELDS = LINK_LIST_FIELDS | {k for k, v in FIELD_TYPES.items() if v == TEXT_LIST}
-
-

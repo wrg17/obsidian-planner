@@ -2,4 +2,4 @@
 
 from .server import COVERS, NOT_EXPOSED, TOOLS, build_service, call_tool
 
-__all__ = ["TOOLS", "COVERS", "NOT_EXPOSED", "call_tool", "build_service"]
+__all__ = ["COVERS", "NOT_EXPOSED", "TOOLS", "build_service", "call_tool"]

@@ -12,22 +12,25 @@ mechanisms disagreeing about where a doc belongs is how notes go missing.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Iterable, Iterator
-
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 from ..domain import schema
-from ..domain.errors import NoteNotFound, ValidationError
+from ..domain.errors import NoteNotFoundError, ValidationError
 from ..domain.note import Note
-from .commands import CreateDirectory, DeleteFile, WriteFile
 from .audit import resolve_journal
+from .commands import CreateDirectory, DeleteFile, WriteFile
 from .journal import RecoveryReport
 from .unit_of_work import UnitOfWork
 
+
 def _names_in(directory: Path) -> set[str]:
-    """Actual directory entries, so a case-insensitive filesystem cannot pass off the
-    caller's spelling as the stored one."""
+    """The actual directory entries.
+
+    Read rather than assumed, so a case-insensitive filesystem cannot pass off the
+    caller's spelling as the stored one.
+    """
     try:
         return {p.name for p in directory.iterdir()}
     except OSError:
@@ -40,6 +43,8 @@ CONTENT_FOLDERS = ("Items", "Docs", "Meetings", "Reviews", "Journal")
 
 
 class MarkdownNoteRepository:
+    """Notes stored as markdown files, in the folders Obsidian reads."""
+
     def __init__(self, root: str | Path, dsn: str | None = None):
         self.root = Path(root)
         # An ambient transaction rather than one passed to every call. The service
@@ -54,7 +59,9 @@ class MarkdownNoteRepository:
         self.journal = resolve_journal(self.root, dsn)
         self._uow = UnitOfWork(self.journal)
 
-    def describe(self, summary: str = "", actor: str = "", request_id: str = "") -> None:
+    def describe(
+        self, summary: str = "", actor: str = "", request_id: str = ""
+    ) -> None:
         """Attach audit metadata to the next transaction.
 
         Set before opening the unit of work, because the operation row is inserted
@@ -65,8 +72,10 @@ class MarkdownNoteRepository:
         self._uow._request_id = request_id
 
     def has_pending_transaction(self) -> bool:
-        """True when a journal is on disk, i.e. a transaction was interrupted and
-        recovery has not run or could not finish."""
+        """True when a journal is on disk, i.e.
+
+        a transaction was interrupted and recovery has not run or could not finish.
+        """
         return self.journal.has_pending()
 
     def recover(self) -> RecoveryReport:
@@ -112,6 +121,7 @@ class MarkdownNoteRepository:
     # --- locating -----------------------------------------------------------------
 
     def path_for(self, kind: str, title: str) -> Path:
+        """Where a note of this kind and title belongs. Touches no disk."""
         return self.root / schema.folder_for(kind) / f"{title}.md"
 
     def find(self, title: str) -> Path | None:
@@ -133,8 +143,14 @@ class MarkdownNoteRepository:
                 # case clash if fed back. Canonicalise against the real entry.
                 if candidate.name in _names_in(candidate.parent):
                     return candidate
-                return next((p for p in sorted(candidate.parent.glob("*.md"))
-                             if p.stem.casefold() == folded), candidate)
+                return next(
+                    (
+                        p
+                        for p in sorted(candidate.parent.glob("*.md"))
+                        if p.stem.casefold() == folded
+                    ),
+                    candidate,
+                )
         # Nothing at the exact path. On a case-sensitive filesystem that is the only
         # probe that could have matched, so scan before giving up -- otherwise the same
         # request 200s on macOS and 404s on Linux, with the disk deciding rather than
@@ -155,24 +171,28 @@ class MarkdownNoteRepository:
         return None
 
     def exists(self, title: str) -> bool:
+        """Whether a note with this title is stored, wherever it lives."""
         return self.find(title) is not None
 
     def _paths(self) -> Iterator[Path]:
         for folder in CONTENT_FOLDERS:
             directory = self.root / folder
             if directory.is_dir():
-                yield from sorted(p for p in directory.glob("*.md")
-                                  if not p.name.startswith("."))
+                yield from sorted(
+                    p for p in directory.glob("*.md") if not p.name.startswith(".")
+                )
 
     # --- reading ------------------------------------------------------------------
 
     def titles(self) -> Iterable[str]:
+        """Every note title, without parsing any of the files."""
         return [p.stem for p in self._paths()]
 
     def get(self, title: str) -> Note:
+        """The note with this title. Raises NoteNotFoundError."""
         path = self.find(title)
         if path is None:
-            raise NoteNotFound(f"no note titled {title!r}")
+            raise NoteNotFoundError(f"no note titled {title!r}")
         # path.stem, not `title`: the note is identified by what is stored, not by how
         # the caller spelled it.
         return Note.from_markdown(path.read_text(encoding="utf-8"), path.stem)
@@ -191,6 +211,7 @@ class MarkdownNoteRepository:
                 continue
 
     def iter_raw(self) -> Iterable[tuple[str, str]]:
+        """(title, text) for every note, including ones that will not parse."""
         for path in self._paths():
             try:
                 yield path.stem, path.read_text(encoding="utf-8")
@@ -200,14 +221,15 @@ class MarkdownNoteRepository:
     # --- writing ------------------------------------------------------------------
 
     def save(self, note: Note) -> Note:
+        """Write the note, creating or overwriting."""
         existing = self.find(note.title)
         target = existing or self.path_for(note.kind, note.title)
-        self._run(CreateDirectory(target.parent),
-                  WriteFile(target, note.to_markdown()))
+        self._run(CreateDirectory(target.parent), WriteFile(target, note.to_markdown()))
         return note
 
     def delete(self, title: str) -> None:
+        """Remove the note. Raises NoteNotFoundError."""
         path = self.find(title)
         if path is None:
-            raise NoteNotFound(f"no note titled {title!r}")
+            raise NoteNotFoundError(f"no note titled {title!r}")
         self._run(DeleteFile(path))

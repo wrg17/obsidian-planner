@@ -9,7 +9,8 @@ implementation could be SQLite or an object store without the service noticing.
 
 from __future__ import annotations
 
-from typing import Iterable, Protocol, runtime_checkable
+from collections.abc import Iterable
+from typing import Protocol, runtime_checkable
 
 from ..domain.note import Note
 
@@ -24,10 +25,10 @@ class NoteRepository(Protocol):
     """
 
     def get(self, title: str) -> Note:
-        """The note titled `title`. Raises NoteNotFound."""
+        """The note titled `title`. Raises NoteNotFoundError."""
 
     def exists(self, title: str) -> bool:
-        ...
+        """Whether a note with this title is stored."""
 
     def titles(self) -> Iterable[str]:
         """Every note title, without parsing the files.
@@ -40,18 +41,23 @@ class NoteRepository(Protocol):
         """Every note that can be read. Unreadable ones are skipped."""
 
     def iter_raw(self) -> Iterable[tuple[str, str]]:
-        """(title, text) for every note, readable or not, so callers can report on
-        the ones that fail to parse."""
+        """(title, text) for every note, readable or not.
+
+        Callers need the unreadable ones too, to report on what failed to parse.
+        """
 
     def save(self, note: Note) -> Note:
         """Create or overwrite. Placement is the implementation's business."""
 
     def delete(self, title: str) -> None:
-        """Raises NoteNotFound."""
+        """Raises NoteNotFoundError."""
 
     def describe(self, summary: str = "", actor: str = "", request_id: str = ""):
-        """Label the next transaction for the audit log. No-op for backends without
-        one; the file journal keeps nothing after a transaction finishes."""
+        """Label the next transaction for the audit log.
+
+        No-op for backends without one; the file journal keeps nothing after a
+        transaction finishes.
+        """
 
     def has_pending_transaction(self) -> bool:
         """True when an interrupted transaction is awaiting recovery.

@@ -25,24 +25,33 @@ class TestTheModelFollowsTheDomain:
 
     def test_nothing_is_offered_that_the_domain_does_not_know(self):
         """`title` and `body` are the note's identity and content rather than
-        properties, so they are the only additions."""
+        properties, so they are the only additions.
+        """
         extra = set(NoteIn.model_fields) - set(S.FIELD_TYPES)
         assert extra == {"title", "body"}
 
     def test_derived_properties_are_withheld(self):
-        """icon and iconColor follow from kind; accepting them would invite a client
-        to send one that disagrees."""
+        """Icon and iconColor follow from kind; accepting them would invite a client
+        to send one that disagrees.
+        """
         assert not (WITHHELD & set(NoteIn.model_fields))
 
     def test_only_kind_and_title_are_required(self):
         required = {n for n, f in NoteIn.model_fields.items() if f.is_required()}
         assert required == {"kind", "title"}
 
-    @pytest.mark.parametrize("field,expected", [
-        ("due", datetime.date), ("scheduled", datetime.date),
-        ("closed", datetime.date), ("last_done", datetime.date),
-        ("date", datetime.date), ("priority", int), ("done", bool),
-    ])
+    @pytest.mark.parametrize(
+        "field,expected",
+        [
+            ("due", datetime.date),
+            ("scheduled", datetime.date),
+            ("closed", datetime.date),
+            ("last_done", datetime.date),
+            ("date", datetime.date),
+            ("priority", int),
+            ("done", bool),
+        ],
+    )
     def test_storage_types_become_wire_types(self, field, expected):
         assert NoteIn.model_fields[field].annotation == expected | None
 
@@ -59,10 +68,15 @@ class TestTheModelFollowsTheDomain:
 class TestPrecision:
     """Where the wire says more than the vault can."""
 
-    @pytest.mark.parametrize("field,enum", [
-        ("kind", S.KindEnum), ("status", S.StatusEnum),
-        ("type", S.IssueTypeEnum), ("recur", S.RecurEnum),
-    ])
+    @pytest.mark.parametrize(
+        "field,enum",
+        [
+            ("kind", S.KindEnum),
+            ("status", S.StatusEnum),
+            ("type", S.IssueTypeEnum),
+            ("recur", S.RecurEnum),
+        ],
+    )
     def test_vocabularies_are_enums_not_strings(self, field, enum):
         annotation = NoteIn.model_fields[field].annotation
         assert annotation in (enum, enum | None)
@@ -92,13 +106,16 @@ class TestPatch:
 class TestJsonSchema:
     def test_enums_are_inlined(self):
         """FastAPI serves the whole document so a $ref resolves; a model gets one tool
-        at a time, so the values have to be where it will look."""
+        at a time, so the values have to be where it will look.
+        """
         import json
+
         assert "$ref" not in json.dumps(note_properties())
 
     def test_optional_enums_are_flat(self):
         """`anyOf: [enum, null]` is honest but makes a model look one level deeper.
-        Optionality is already carried by `required`."""
+        Optionality is already carried by `required`.
+        """
         assert note_properties()["type"]["enum"] == list(S.ISSUE_TYPE)
         assert note_properties()["recur"]["enum"] == list(S.RECUR)
 
@@ -128,14 +145,21 @@ class TestBothTransportsSeeTheSameFields:
     def test_openapi_and_mcp_offer_the_same_note_fields(self, client):
         from planner.mcp import TOOLS
 
-        served = set(client.get("/openapi.json").json()
-                     ["components"]["schemas"]["NoteIn"]["properties"])
-        tooled = set(next(t for t in TOOLS
-                          if t["name"] == "create_note")["inputSchema"]["properties"])
+        served = set(
+            client.get("/openapi.json").json()["components"]["schemas"]["NoteIn"][
+                "properties"
+            ]
+        )
+        tooled = set(
+            next(t for t in TOOLS if t["name"] == "create_note")["inputSchema"][
+                "properties"
+            ]
+        )
         assert served == tooled
 
     def test_neither_transport_defines_the_model_itself(self):
         import inspect
+
         from planner.api import schemas
         from planner.mcp import server
 

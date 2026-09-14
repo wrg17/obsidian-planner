@@ -7,10 +7,10 @@ import pytest
 
 from planner.domain import schema as S
 
-
 # =====================================================================================
 # GET /schema  --  M1..M6
 # =====================================================================================
+
 
 class TestSchemaEndpoint:
     def test_M1_values_are_generated_from_the_enforcing_module(self, client):
@@ -26,9 +26,14 @@ class TestSchemaEndpoint:
             if not kind["statuses"] or kind["name"] not in ("task", "doc"):
                 continue
             for status in kind["statuses"]:
-                r = client.post("/notes", json={
-                    "kind": kind["name"], "title": f"M1 {kind['name']} {status}",
-                    "status": status})
+                r = client.post(
+                    "/notes",
+                    json={
+                        "kind": kind["name"],
+                        "title": f"M1 {kind['name']} {status}",
+                        "status": status,
+                    },
+                )
                 assert r.status_code == 201, (kind["name"], status, r.json())
 
     def test_M2_every_kind_is_fully_described(self, client):
@@ -73,6 +78,7 @@ class TestSchemaEndpoint:
 # GET /problems  --  P1..P7
 # =====================================================================================
 
+
 class TestProblems:
     def test_P1_is_not_defeated_by_the_input_it_reports_on(self, client, populated):
         """An endpoint whose job is finding malformed notes must survive them."""
@@ -87,7 +93,8 @@ class TestProblems:
 
     def test_P1_is_pure(self, client, populated):
         (populated.repo.root / "Items" / "Typo.md").write_text(
-            "---\nkind: task\nstatus: nonsense\n---\n")
+            "---\nkind: task\nstatus: nonsense\n---\n"
+        )
         before = set(populated.repo.titles())
         client.get("/problems")
         assert set(populated.repo.titles()) == before
@@ -97,11 +104,18 @@ class TestProblems:
         assert client.get("/problems").json() == []
 
     def test_P3_stays_empty_across_a_full_lifecycle(self, client):
-        client.post("/notes", json={"kind": "epic", "title": "P3 epic",
-                                    "parent": "Website relaunch",
-                                    "project": "Website relaunch"})
-        client.post("/notes", json={"kind": "task", "title": "P3 task",
-                                    "parent": "P3 epic"})
+        client.post(
+            "/notes",
+            json={
+                "kind": "epic",
+                "title": "P3 epic",
+                "parent": "Website relaunch",
+                "project": "Website relaunch",
+            },
+        )
+        client.post(
+            "/notes", json={"kind": "task", "title": "P3 task", "parent": "P3 epic"}
+        )
         client.patch("/notes/P3 task", json={"priority": 1})
         client.post("/notes/P3 task/close")
         client.post("/notes/P3 task/reopen")
@@ -109,34 +123,43 @@ class TestProblems:
         client.delete("/notes/P3 epic")
         assert client.get("/problems").json() == []
 
-    @pytest.mark.parametrize("frontmatter,expected", [
-        ("---\nkind: task\nstatus: in-progress\n---\n", "status"),
-        ("---\nkind: task\ntype: cleanup\n---\n", "type"),
-        ("---\nkind: routine\nrecur: fortnightly\n---\n", "recur"),
-        ("---\nkind: task\npriority: 9\n---\n", "priority"),
-    ])
+    @pytest.mark.parametrize(
+        "frontmatter,expected",
+        [
+            ("---\nkind: task\nstatus: in-progress\n---\n", "status"),
+            ("---\nkind: task\ntype: cleanup\n---\n", "type"),
+            ("---\nkind: routine\nrecur: fortnightly\n---\n", "recur"),
+            ("---\nkind: task\npriority: 9\n---\n", "priority"),
+        ],
+    )
     def test_P4_catches_bad_values(self, client, populated, frontmatter, expected):
         (populated.repo.root / "Items" / "Bad.md").write_text(frontmatter)
         found = [p for p in client.get("/problems").json() if p["title"] == "Bad"]
         assert found and expected in found[0]["message"]
 
-    @pytest.mark.parametrize("field,frontmatter", [
-        ("parent", '---\nkind: task\nparent: "[[Ghost]]"\n---\n'),
-        ("project", '---\nkind: task\nproject: "[[Ghost]]"\n---\n'),
-        ("blocked_by", '---\nkind: task\nblocked_by:\n  - "[[Ghost]]"\n---\n'),
-    ])
-    def test_P4_catches_structural_links_that_do_not_resolve(self, client, populated,
-                                                             field, frontmatter):
+    @pytest.mark.parametrize(
+        "field,frontmatter",
+        [
+            ("parent", '---\nkind: task\nparent: "[[Ghost]]"\n---\n'),
+            ("project", '---\nkind: task\nproject: "[[Ghost]]"\n---\n'),
+            ("blocked_by", '---\nkind: task\nblocked_by:\n  - "[[Ghost]]"\n---\n'),
+        ],
+    )
+    def test_P4_catches_structural_links_that_do_not_resolve(
+        self, client, populated, field, frontmatter
+    ):
         """Bases cannot follow a link to check it resolves, so a parent pointing at a
         deleted note looks exactly like one that works. This is the only place it
-        surfaces."""
+        surfaces.
+        """
         (populated.repo.root / "Items" / "Dangling.md").write_text(frontmatter)
         found = [p for p in client.get("/problems").json() if p["title"] == "Dangling"]
         assert found and field in found[0]["message"] and "Ghost" in found[0]["message"]
 
     def test_P5_reports_without_repairing(self, client, populated):
         """Silently rewriting someone's notes is worse than the fault being reported,
-        and Obsidian is editing the same files."""
+        and Obsidian is editing the same files.
+        """
         path = populated.repo.root / "Items" / "Typo.md"
         original = "---\nkind: task\nstatus: in-progress\n---\n"
         path.write_text(original)
@@ -147,7 +170,8 @@ class TestProblems:
     def test_P6_link_checking_ignores_case(self, client, populated):
         """Matching how notes are found (G2) and created (C4)."""
         (populated.repo.root / "Items" / "Caselink.md").write_text(
-            '---\nkind: task\nparent: "[[design SYSTEM]]"\n---\n')
+            '---\nkind: task\nparent: "[[design SYSTEM]]"\n---\n'
+        )
         titles = [p["title"] for p in client.get("/problems").json()]
         assert "Caselink" not in titles
 
@@ -164,15 +188,18 @@ class TestProblems:
 # GET /health  --  N1..N4
 # =====================================================================================
 
+
 class TestHealth:
     def test_N1_is_200_when_the_vault_is_present(self, client):
         r = client.get("/health")
         assert r.status_code == 200 and r.json()["status"] == "ok"
 
-    def test_N1_is_still_200_when_the_vault_is_missing(self, client, tmp_path,
-                                                       monkeypatch):
-        """"Up but misconfigured" and "down" are different conditions; a load balancer
-        has to be able to tell them apart."""
+    def test_N1_is_still_200_when_the_vault_is_missing(
+        self, client, tmp_path, monkeypatch
+    ):
+        """A misconfigured server and a dead one differ, and a load balancer
+        has to be able to tell them apart.
+        """
         monkeypatch.setenv("PLANNER_VAULT", str(tmp_path / "gone"))
         r = client.get("/health")
         assert r.status_code == 200
@@ -191,7 +218,8 @@ class TestHealth:
 
     def test_N4_discloses_the_resolved_path(self, client, populated):
         """The commonest deployment mistake is PLANNER_VAULT pointing somewhere
-        unexpected; hiding the answer makes that harder to find."""
+        unexpected; hiding the answer makes that harder to find.
+        """
         assert client.get("/health").json()["vault"] == str(populated.repo.root)
 
 
@@ -203,14 +231,19 @@ class TestHealthReportsInterruptedTransactions:
 
     def test_a_leftover_journal_is_surfaced(self, client, populated):
         from planner.repository.journal import Entry, Journal, digest
+
         Journal(populated.repo.root).record(
-            Entry("Items/T.md", None, digest(b"x"), None))
+            Entry("Items/T.md", None, digest(b"x"), None)
+        )
         assert client.get("/health").json()["interrupted_transaction"] is True
 
     def test_still_200_so_the_condition_is_readable(self, client, populated):
         """Failing the health check would take the service out of rotation exactly
-        when someone needs the API to inspect what happened."""
+        when someone needs the API to inspect what happened.
+        """
         from planner.repository.journal import Entry, Journal, digest
+
         Journal(populated.repo.root).record(
-            Entry("Items/T.md", None, digest(b"x"), None))
+            Entry("Items/T.md", None, digest(b"x"), None)
+        )
         assert client.get("/health").status_code == 200
