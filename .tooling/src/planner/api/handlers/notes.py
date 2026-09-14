@@ -49,7 +49,7 @@ def list_notes(
         for k, v in {"project": project, "parent": parent, "status": status}.items()
         if v is not None
     }
-    return [n.to_dict() for n in service.list(kind=kind, open_only=open_only, **where)]
+    return [n.to_dict() for n in service.find(kind=kind, open_only=open_only, **where)]
 
 
 def create_note(payload: NoteIn, service: NoteService = Depends(get_service)):

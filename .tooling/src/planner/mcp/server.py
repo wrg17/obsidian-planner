@@ -259,7 +259,7 @@ def call_tool(name: str, arguments: dict, service: NoteService | None = None) ->
 
 def _dispatch(name, args, service):
     if name == "list_notes":
-        notes = service.list(
+        notes = service.find(
             kind=args.get("kind"),
             open_only=args.get("open", False),
             **{

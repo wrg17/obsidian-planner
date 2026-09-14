@@ -82,16 +82,16 @@ class TestRead:
             vault.get("Nope")
 
     def test_list_by_kind(self, populated):
-        titles = {n.title for n in populated.list(kind="epic")}
+        titles = {n.title for n in populated.find(kind="epic")}
         assert titles == {"Design system", "Content migration"}
-        assert all(n.kind == "epic" for n in populated.list(kind="epic"))
+        assert all(n.kind == "epic" for n in populated.find(kind="epic"))
 
     def test_list_by_field(self, populated):
-        titles = [n.title for n in populated.list(project="Website relaunch")]
+        titles = [n.title for n in populated.find(project="Website relaunch")]
         assert "Pick a type scale" in titles and "Studio" not in titles
 
     def test_list_is_sorted_by_title(self, populated):
-        titles = [n.title for n in populated.list()]
+        titles = [n.title for n in populated.find()]
         assert titles == sorted(titles)
 
     def test_malformed_notes_are_skipped_not_raised(self, populated):
@@ -99,7 +99,7 @@ class TestRead:
         exception that should take down a listing.
         """
         (populated.repo.root / "Items" / "Broken.md").write_text("no frontmatter here")
-        assert "Broken" not in [n.title for n in populated.list()]
+        assert "Broken" not in [n.title for n in populated.find()]
 
 
 class TestProblems:
@@ -199,7 +199,7 @@ class TestTitleUniquenessIsCaseInsensitive:
 class TestServiceGuards:
     def test_unknown_kind_in_a_filter(self, vault):
         with pytest.raises(ValidationError, match="unknown kind"):
-            vault.list(kind="epicc")
+            vault.find(kind="epicc")
 
     def test_a_note_cannot_be_its_own_parent(self, populated):
         with pytest.raises(ValidationError, match="own parent"):
@@ -277,13 +277,13 @@ class TestLinkFiltersIgnoreCase:
         }
 
     def test_project_filter_ignores_case(self, populated):
-        assert {n.title for n in populated.list(project="WEBSITE RELAUNCH")} == {
-            n.title for n in populated.list(project="Website relaunch")
+        assert {n.title for n in populated.find(project="WEBSITE RELAUNCH")} == {
+            n.title for n in populated.find(project="Website relaunch")
         }
 
     def test_non_link_filters_stay_exact(self, populated):
         """Only links are case-insensitive; a status is a vocabulary term and must
         match exactly, or the Triage view would stop catching typos.
         """
-        assert populated.list(status="DOING") == []
-        assert populated.list(status="doing")
+        assert populated.find(status="DOING") == []
+        assert populated.find(status="doing")

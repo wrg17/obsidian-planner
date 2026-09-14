@@ -8,7 +8,6 @@ two surfaces would slowly become different products.
 
 from __future__ import annotations
 
-import builtins
 from datetime import date
 
 from ..domain import schema
@@ -38,13 +37,7 @@ class NoteService:
         """Whether a note with this title is stored."""
         return self.repo.exists(title)
 
-    # `builtins.list[...]` throughout this class, not `list[...]`: the method below is
-    # named `list`, which shadows the builtin in the class namespace. Runtime is
-    # unaffected because annotations are strings here, but anything that resolves them
-    # -- pdoc, and any typing tool -- fails with "'function' object is not
-    # subscriptable". The same shape of bug once made a pydantic field named `date`
-    # unresolvable against `date | None`.
-    def list(self, kind=None, open_only=False, **where) -> builtins.list[Note]:
+    def find(self, kind=None, open_only=False, **where) -> list[Note]:
         """Notes matching the given kind and field values."""
         if kind is not None and kind not in schema.KINDS:
             raise ValidationError(f"unknown kind {kind!r}", "kind")
@@ -76,7 +69,7 @@ class NoteService:
             return actual.casefold() == wanted.casefold()
         return actual == wanted
 
-    def children_of(self, title: str) -> builtins.list[Note]:
+    def children_of(self, title: str) -> list[Note]:
         """Direct children only.
 
         Bases cannot walk a parent chain -- no joins, no recursion -- so the app fakes
@@ -84,15 +77,15 @@ class NoteService:
         method stays deliberately one level deep so it matches what the epic and task
         notes show. `descendants_of` is the recursive one.
         """
-        return self.list(parent=title)
+        return self.find(parent=title)
 
-    def descendants_of(self, title: str) -> builtins.list[Note]:
+    def descendants_of(self, title: str) -> list[Note]:
         """Every note below this one, at any depth."""
         found, frontier = [], [title]
         seen = {title}
         while frontier:
             current = frontier.pop()
-            for child in self.list(parent=current):
+            for child in self.find(parent=current):
                 if child.title in seen:  # a hand-edited cycle must not hang us
                     continue
                 seen.add(child.title)
@@ -114,7 +107,7 @@ class NoteService:
             "vault": str(root),
         }
 
-    def problems(self) -> builtins.list[tuple[str, str]]:
+    def problems(self) -> list[tuple[str, str]]:
         """Notes that will not parse or do not validate.
 
         The API's counterpart to the Triage base. Bases has no enum property type, so a
@@ -185,7 +178,7 @@ class NoteService:
         self._check_references(note)
         return self.repo.save(note)
 
-    def delete(self, title: str, cascade: bool = False) -> builtins.list[str]:
+    def delete(self, title: str, cascade: bool = False) -> list[str]:
         """Delete a note, refusing to orphan its children.
 
         INVARIANT (closure): the API must never produce a state it would refuse to
@@ -218,7 +211,7 @@ class NoteService:
             removed.append(title)
         return removed
 
-    def create_many(self, notes) -> builtins.list[Note]:
+    def create_many(self, notes) -> list[Note]:
         """Create several notes as one transaction.
 
         Order matters and is the caller's: a child listed before its parent fails the
