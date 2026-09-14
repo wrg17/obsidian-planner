@@ -31,6 +31,16 @@ class ChildrenExistError(PlannerError):
     """
 
 
+class NoteClosedError(PlannerError):
+    """The note is closed, and closed notes do not change.
+
+    A closed ticket is a record of what happened. Editing one rewrites history --
+    silently, since nothing in Obsidian shows that a done note used to say something
+    else. Reopening first makes the change deliberate and leaves the reopening in the
+    audit log.
+    """
+
+
 class NoteExistsError(PlannerError):
     """A note with that title already exists.
 

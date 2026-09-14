@@ -71,7 +71,6 @@ COVERS = {
     "get_note": ("GET", "/notes/{title}"),
     "create_note": ("POST", "/notes"),
     "update_note": ("PATCH", "/notes/{title}"),
-    "delete_note": ("DELETE", "/notes/{title}"),
     "get_children": ("GET", "/notes/{title}/children"),
     "close_note": ("POST", "/notes/{title}/close"),
     "reopen_note": ("POST", "/notes/{title}/reopen"),
@@ -93,6 +92,15 @@ NOT_EXPOSED = {
         "/health",
     ): "Operational. A model has no use for liveness or the vault path, and a tool it "
     "will never sensibly call is noise in every prompt that lists the tools.",
+    (
+        "DELETE",
+        "/notes/{title}",
+    ): "Withheld deliberately. Deleting a note destroys work with no undo -- the audit "
+    "log records that it happened and keeps the prior content, but nothing puts the "
+    "file back. For a model an absent tool does not exist, which is a far stronger "
+    "guarantee than a refusal it might argue with or a confirmation it might assume. "
+    "Closing or cancelling covers what an assistant legitimately needs: both leave the "
+    "note in place and out of the way. Deletion stays a human action, over REST.",
 }
 
 
@@ -182,15 +190,6 @@ TOOLS = [
                     "description": "Defaults to today.",
                 },
             },
-            "required": ["title"],
-        },
-    },
-    {
-        "name": "delete_note",
-        "description": _description("delete_note"),
-        "inputSchema": {
-            "type": "object",
-            "properties": {"title": {"type": "string"}},
             "required": ["title"],
         },
     },
@@ -304,10 +303,6 @@ def _dispatch(name, args, service):
         return service.close(
             args["title"], status=args.get("status", "done"), on=on
         ).to_dict()
-
-    if name == "delete_note":
-        service.delete(args["title"])
-        return {"deleted": args["title"]}
 
     if name == "describe_schema":
         return {

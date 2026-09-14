@@ -81,12 +81,17 @@ class TestBothTransportsShowTheSameText:
             served = paths[path][method.lower()]["description"]
             assert served.strip() == operation.description.strip()
 
-    def test_a_model_is_told_about_the_cascade_rule(self):
-        """Concretely: delete refuses a parent. A model that has not been told will
-        simply try it and get an error it could not have anticipated.
+    def test_a_model_is_told_that_closed_notes_are_immutable(self):
+        """A rule a model would otherwise discover by hitting it.
+
+        This used to assert the cascade rule on delete_note, which is no longer a
+        tool. Closed-note immutability is the same shape of surprise, and the one a
+        model is now most likely to meet: patching a done ticket looks reasonable
+        until it 409s.
         """
-        delete = next(t for t in TOOLS if t["name"] == "delete_note")
-        assert "cascade" in delete["description"]
+        update = next(t for t in TOOLS if t["name"] == "update_note")
+        assert "closed" in update["description"].lower()
+        assert "reopen" in update["description"].lower()
 
     def test_a_swagger_reader_is_told_to_read_the_schema_first(self, client):
         """The advice that used to exist only in the tool descriptions."""

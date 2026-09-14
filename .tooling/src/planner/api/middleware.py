@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 
 from ..domain.errors import (
     ChildrenExistError,
+    NoteClosedError,
     NoteExistsError,
     NoteNotFoundError,
     PlannerError,
@@ -33,6 +34,7 @@ STATUS_FOR = {
     NoteNotFoundError: 404,
     NoteExistsError: 409,
     ChildrenExistError: 409,
+    NoteClosedError: 409,
 }
 
 

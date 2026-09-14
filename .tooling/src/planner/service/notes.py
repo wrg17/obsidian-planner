@@ -13,6 +13,7 @@ from datetime import date
 from ..domain import schema
 from ..domain.errors import (
     ChildrenExistError,
+    NoteClosedError,
     NoteExistsError,
     PlannerError,
     ValidationError,
@@ -160,8 +161,26 @@ class NoteService:
         return self.repo.save(note)
 
     def update(self, title: str, **changes) -> Note:
-        """Change fields on an existing note. A None value removes one."""
+        """Change fields on an existing note. A None value removes one.
+
+        Refuses a closed note. Reopen it first -- which puts the reopening in the audit
+        log, where an edit smuggled into a done ticket would not be.
+        """
         note = self.repo.get(title)
+        if not note.is_open:
+            raise NoteClosedError(
+                f"{title!r} is closed ({note.fields.get('status')}); reopen it before "
+                f"editing"
+            )
+        return self._apply(note, changes)
+
+    def _apply(self, note: Note, changes: dict) -> Note:
+        """Write changes to a note that has already been cleared for editing.
+
+        Separate from `update` so `close` and `reopen` can reach it. They are the
+        transitions that manage closure itself, so the closed-note guard would make
+        closing a ticket impossible and reopening one a contradiction.
+        """
         if changes.get("kind") not in (None, note.kind):
             raise ValidationError(
                 "kind cannot be changed; delete and recreate instead", "kind"
@@ -254,7 +273,7 @@ class NoteService:
             # `cancelled` work is closed but was never done, and the board's `lane`
             # formula reads the two separately.
             changes["done"] = status == "done"
-        return self.update(title, **changes)
+        return self._apply(note, changes)
 
     def reopen(self, title: str, status: str = "todo") -> Note:
         """Put a closed ticket back into an open status."""
@@ -268,7 +287,7 @@ class NoteService:
         changes = {"status": status, "closed": None}
         if spec.has_done:
             changes["done"] = False
-        return self.update(title, **changes)
+        return self._apply(note, changes)
 
     # --- internals ----------------------------------------------------------------
 

@@ -314,6 +314,26 @@ from a person editing their own notes, and their edit is newer than our abandone
 transaction. `GET /health` reports an interrupted transaction so the condition is never
 silent.
 
+### What a model may do
+
+The MCP surface is deliberately narrower than the REST one. `delete_note` is withheld:
+deleting destroys work with no undo — the audit log records that it happened and keeps
+the prior content, but nothing puts the file back. For a model an **absent tool does not
+exist**, which is a far stronger guarantee than a refusal it might argue with or a
+confirmation it might assume was given. Closing or cancelling covers what an assistant
+legitimately needs, and both leave the note in place and off the board. Deletion stays a
+human action, over REST.
+
+Closed notes are immutable on **both** surfaces. A closed ticket is a record of what
+happened, and editing one rewrites that record silently — nothing in Obsidian shows that
+a done note used to say something else. `PATCH` returns **409**, not 422: the request is
+well formed, the note is simply in a state that forbids it. Reopen first, and the
+reopening lands in the audit log where an edit smuggled into a done ticket would not.
+
+Both `status` and the `done` checkbox close a ticket, so either protects it — guarding
+only on status would leave a hole reachable from Obsidian, where ticking the box is the
+natural gesture.
+
 ### Audit log
 
 Set `PLANNER_DSN` and every operation is recorded in Postgres — what changed, at whose

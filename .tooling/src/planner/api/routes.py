@@ -121,7 +121,14 @@ ROUTES: tuple[Route, ...] = (
         notes.update_note,
         ("notes",),
         NoteOut,
-        responses={**VALIDATION, **NOT_FOUND},
+        # 409 as well as 404 and 422: a closed note is refused. The request is well
+        # formed and the note exists, so neither of the others fits -- and a client
+        # that retries on 422 would loop.
+        responses={
+            **VALIDATION,
+            **NOT_FOUND,
+            409: {"model": ErrorOut, "description": "The note is closed; reopen first"},
+        },
     ),
     Route(
         "DELETE",

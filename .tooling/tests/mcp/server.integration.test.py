@@ -2,7 +2,9 @@
 
 import pytest
 
+from planner.api.routes import ROUTES
 from planner.mcp import TOOLS, call_tool
+from planner.mcp.server import NOT_EXPOSED
 
 
 class TestToolSchemas:
@@ -98,9 +100,15 @@ class TestDispatch:
         assert out["result"]["done"] is True
         assert "closed" in out["result"]
 
-    def test_delete(self, populated):
-        assert call_tool("delete_note", {"title": "Test at 320px"}, populated)["ok"]
-        assert not populated.exists("Test at 320px")
+    def test_delete_is_not_reachable(self, populated):
+        """Not merely absent from the listing -- refused by dispatch too.
+
+        A tool name a model invented, or carried over from an older listing, must not
+        reach the service. The note is still there afterwards.
+        """
+        out = call_tool("delete_note", {"title": "Test at 320px"}, populated)
+        assert out["ok"] is False
+        assert populated.exists("Test at 320px")
 
     def test_describe_schema(self, populated):
         out = call_tool("describe_schema", {}, populated)
@@ -232,3 +240,31 @@ class TestTheToolsThatWereMissing:
     def test_children_of_a_missing_note_is_an_error_not_an_empty_list(self, populated):
         out = call_tool("get_children", {"title": "Nope"}, populated)
         assert out["ok"] is False
+
+
+class TestDeleteIsWithheld:
+    """For a model an absent tool does not exist, which is a stronger guarantee than
+    a refusal it might argue with or a confirmation it might assume was given.
+    """
+
+    def test_it_is_not_in_the_listing(self):
+        assert "delete_note" not in [t["name"] for t in TOOLS]
+
+    def test_the_reason_is_recorded_rather_than_implied(self):
+        """Every unexposed route carries why, so the next person to wonder whether it
+        was an oversight can tell that it was not.
+        """
+        reason = NOT_EXPOSED[("DELETE", "/notes/{title}")]
+        assert "destroys work" in reason
+
+    def test_the_route_still_exists_over_rest(self):
+        """Withheld from a model, not removed from the product. Deletion stays a
+        human action.
+        """
+        assert any(r.method == "DELETE" for r in ROUTES)
+
+    def test_a_model_can_still_get_a_note_out_of_the_way(self):
+        """Withholding delete would be unreasonable if nothing replaced it. Closing
+        and cancelling both leave the note in place and off the board.
+        """
+        assert "close_note" in [t["name"] for t in TOOLS]

@@ -152,8 +152,13 @@ OPERATIONS: dict[tuple[str, str], Operation] = {
     ("PATCH", "/notes/{title}"): Operation(
         examples={"title": DEMO["task"]},
         summary="Update a note",
-        guidance="Change fields on an existing note. A field sent as null is removed; a field left out is untouched. `kind` cannot be changed.",
+        guidance="Change fields on an existing note. A field sent as null is removed; a field left out is untouched. `kind` cannot be changed. A **closed** note is refused -- reopen it first, which puts the change in the audit log.",
         invariants="""INVARIANTS
+  U0. A closed note is immutable. Closing records what happened; editing a closed
+      note rewrites that record silently, since nothing in Obsidian shows that a
+      done ticket used to say something else. Reopening first makes the change
+      deliberate and leaves the reopening in the audit log. 409, not 422: the
+      request is well formed, the note is simply in a state that forbids it.
   U1. Idempotent. Applying the same patch twice leaves the same state. (S6)
   U2. Minimal. Only fields present in the body are touched; everything else,
       including the markdown body, is preserved byte for byte. A field sent as

@@ -7,6 +7,7 @@ definition of what a task is.
 
 from .errors import (
     ChildrenExistError,
+    NoteClosedError,
     NoteExistsError,
     NoteNotFoundError,
     PlannerError,
@@ -49,6 +50,7 @@ __all__ = [
     "Kind",
     "KindEnum",
     "Note",
+    "NoteClosedError",
     "NoteExistsError",
     "NoteNotFoundError",
     "PlannerError",

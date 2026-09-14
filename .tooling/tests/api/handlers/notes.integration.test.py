@@ -653,3 +653,38 @@ class TestBulkCreate:
             ],
         )
         assert client.get("/problems").json() == []
+
+
+class TestPatchingAClosedNote:
+    """409, not 422: the request is well formed, the note is in a state that
+    forbids it. A client that retries on 422 would loop forever.
+    """
+
+    def test_it_is_refused(self, client, populated):
+        client.post("/notes/Pick a type scale/close")
+        assert (
+            client.patch("/notes/Pick a type scale", json={"priority": 1}).status_code
+            == 409
+        )
+
+    def test_the_body_says_what_to_do_about_it(self, client, populated):
+        client.post("/notes/Pick a type scale/close")
+        detail = client.patch("/notes/Pick a type scale", json={"priority": 1}).json()[
+            "detail"
+        ]
+        assert "reopen" in detail.lower()
+
+    def test_reopening_then_patching_works(self, client, populated):
+        client.post("/notes/Pick a type scale/close")
+        client.post("/notes/Pick a type scale/reopen")
+        assert (
+            client.patch("/notes/Pick a type scale", json={"priority": 1}).status_code
+            == 200
+        )
+
+    def test_the_rule_is_documented_where_a_reader_will_find_it(self, client):
+        operation = client.get("/openapi.json").json()["paths"]["/notes/{title}"][
+            "patch"
+        ]
+        assert "closed" in operation["description"].lower()
+        assert "409" in operation["responses"]

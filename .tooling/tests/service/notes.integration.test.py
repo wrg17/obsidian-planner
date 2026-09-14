@@ -4,7 +4,12 @@ from datetime import date
 
 import pytest
 
-from planner import NoteExistsError, NoteNotFoundError, ValidationError
+from planner import (
+    NoteClosedError,
+    NoteExistsError,
+    NoteNotFoundError,
+    ValidationError,
+)
 from planner.domain.schema import KINDS
 
 
@@ -287,3 +292,64 @@ class TestLinkFiltersIgnoreCase:
         """
         assert populated.find(status="DOING") == []
         assert populated.find(status="doing")
+
+
+class TestClosedNotesAreImmutable:
+    """A closed ticket is a record of what happened.
+
+    Editing one rewrites that record silently: nothing in Obsidian shows that a done
+    note used to say something else, and the audit log records an `update` that looks
+    like any other. Reopening first makes the change deliberate and leaves the
+    reopening in the log.
+    """
+
+    def test_a_closed_note_refuses_edits(self, populated):
+        populated.close("Pick a type scale")
+        with pytest.raises(NoteClosedError):
+            populated.update("Pick a type scale", priority=1)
+
+    def test_the_error_names_the_status_it_is_in(self, populated):
+        """`cancelled` and `done` are both closed; a reader should know which."""
+        populated.close("Pick a type scale", status="cancelled")
+        with pytest.raises(NoteClosedError, match="cancelled"):
+            populated.update("Pick a type scale", priority=1)
+
+    def test_the_note_is_unchanged_after_a_refused_edit(self, populated):
+        populated.close("Pick a type scale")
+        before = populated.get("Pick a type scale").fields.copy()
+        with pytest.raises(NoteClosedError):
+            populated.update("Pick a type scale", priority=1)
+        assert populated.get("Pick a type scale").fields == before
+
+    def test_a_ticket_closed_by_the_done_checkbox_is_also_immutable(self, populated):
+        """`done` and `status` are additive -- either closes the ticket, so either
+        must protect it. Guarding only on status would leave a hole reachable from
+        Obsidian, where ticking the box is the natural gesture.
+        """
+        populated.update("Pick a type scale", done=True)
+        with pytest.raises(NoteClosedError):
+            populated.update("Pick a type scale", priority=1)
+
+    def test_reopening_restores_editability(self, populated):
+        populated.close("Pick a type scale")
+        populated.reopen("Pick a type scale")
+        assert populated.update("Pick a type scale", priority=1)
+
+    def test_closing_a_closed_note_still_works(self, populated):
+        """Close and reopen manage closure itself, so the guard cannot apply to them.
+        Closing twice stays idempotent rather than becoming an error.
+        """
+        first = populated.close("Pick a type scale")
+        again = populated.close("Pick a type scale")
+        assert first.fields == again.fields
+
+    def test_a_closed_note_can_still_be_deleted(self, populated):
+        """Immutable is not undeletable. Deleting is not an edit of the record, it is
+        removal of it, and refusing would leave no way to discard finished work.
+        """
+        populated.close("Pick a type scale")
+        populated.delete("Pick a type scale", cascade=True)
+        assert not populated.exists("Pick a type scale")
+
+    def test_an_open_note_is_unaffected(self, populated):
+        assert populated.update("Audit existing components", priority=1)
