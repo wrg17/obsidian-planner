@@ -20,10 +20,16 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
+      # Three kinds of file the whitespace fixers must not touch. The note folders are
+      # the user's own prose. Templates/ carries trailing spaces on purpose -- `due: `,
+      # `- ` and `- [ ] ` leave the cursor where typing continues, and stripping them
+      # changes what every note created from the template starts as. .obsidian/ is
+      # written by the app from memory and rewritten on next launch, so a newline added
+      # here is both discarded and a permanently dirty tree.
       - id: trailing-whitespace
-        exclude: ^(Items|Docs|Meetings|Reviews|Journal)/   # the user's own notes
+        exclude: ^(Items|Docs|Meetings|Reviews|Journal|Templates|\.obsidian)/
       - id: end-of-file-fixer
-        exclude: ^(Items|Docs|Meetings|Reviews|Journal)/
+        exclude: ^(Items|Docs|Meetings|Reviews|Journal|Templates|\.obsidian)/
       - id: check-yaml
       - id: check-merge-conflict
       - id: check-added-large-files
@@ -38,9 +44,13 @@ repos:
         pass_filenames: false
         files: ^\.tooling/src/planner/(api/routes|domain|contracts)/
 
-      - id: no-commit-to-main
-        name: refuse a commit straight to main
-        entry: bash -c '[ "$(git branch --show-current)" != "main" ] || { echo "commit to a branch and open a PR"; exit 1; }'
+      # Both names, because the trunk is not called the same thing in every copy of this
+      # vault: start-fresh.sh re-initialises a fresh clone on `main`, and this repository
+      # kept `master`. Naming one branch left the guard inert in the other, which is how
+      # it shipped -- it never once refused a commit here.
+      - id: no-commit-to-trunk
+        name: refuse a commit straight to the trunk
+        entry: bash -c 'case "$(git branch --show-current)" in main|master) echo "commit to a branch and open a PR"; exit 1;; esac'
         language: system
         pass_filenames: false
         always_run: true
