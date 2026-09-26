@@ -121,6 +121,12 @@ demo: install  ## Fill the vault with throwaway notes
 demo-clear: install  ## Remove them again
 	$(PY) demo/demo.py clear
 
+# Deliberately does not depend on `install`: the venv is one of the things it deletes,
+# and a fresh clone should be able to run this before building anything.
+.PHONY: fresh
+fresh:  ## Make this clone yours (dry run; add ARGS=--yes to apply)
+	scripts/start-fresh.sh $(ARGS)
+
 # --- containers ----------------------------------------------------------------------
 
 .PHONY: db

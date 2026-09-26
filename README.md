@@ -74,6 +74,23 @@ something is overdue, and a routine is a week late — the board looks alive whe
 None of it is committed here — `clear` deletes every file it created, so run that before you start
 adding real work.
 
+## Making it yours
+
+A clone arrives carrying the demo notes you loaded, whatever your machine built, and a
+git history that is not yours. One pass removes all three and starts a fresh repository
+over the same files:
+
+```sh
+.tooling/scripts/start-fresh.sh          # list what it would do, change nothing
+.tooling/scripts/start-fresh.sh --yes    # do it  (or: cd .tooling && make fresh ARGS=--yes)
+```
+
+It clears every note marked `demo: true`, deletes the venv and the coverage, pytest and
+ruff output, drops machine-local editor and Obsidian state, then removes `.git` and
+re-initialises on `main` with a single commit and no remote. A dry run is the default
+rather than a `y/n` prompt, because `.git` does not come back and a prompt gets answered
+without being read. `--keep-git` does everything except the last part.
+
 `Bases/Triage.base` ships empty and should stay that way — every view in it is a "something is
 wrong" query. To confirm it works, set any item's `priority` to `9`; it shows up in **Invalid
 values** immediately, and reverting clears it.
@@ -384,12 +401,40 @@ records the routes deliberately left out and why, and a test fails on any route 
 neither. That check found `reopen_note` missing beside `close_note` — a model could
 close a ticket and not reopen it, which nobody had decided.
 
+**Pointing a model at it.** The transport is stdio, so the client starts the server itself
+— there is no port, and nothing to launch first. Two things have to be right. The
+interpreter must be the one `make install` built, `.tooling/.venv/bin/python`: a system
+`python3` has neither `planner` nor the MCP SDK on its path. And `PLANNER_VAULT` must name
+the vault, because the server otherwise falls back to `.` — which is the *client's* working
+directory, not yours, and a model that finds an empty vault reports it as empty rather than
+as misconfigured.
+
+Claude Code, run from the vault root:
+
+```sh
+claude mcp add planner \
+  --env PLANNER_VAULT="$PWD" \
+  -- "$PWD/.tooling/.venv/bin/python" -m planner.mcp
+```
+
+Claude Desktop — and anything else taking the same shape, in
+`claude_desktop_config.json`:
+
 ```json
 { "mcpServers": { "planner": {
-    "command": "/path/to/planner/.venv/bin/python",
+    "command": "/path/to/planner/.tooling/.venv/bin/python",
     "args": ["-m", "planner.mcp"],
     "env": { "PLANNER_VAULT": "/path/to/planner" } } } }
 ```
+
+Both paths must be absolute: a GUI client inherits neither your shell's directory nor its
+`PATH`. Add `PLANNER_DSN` alongside `PLANNER_VAULT` and the model's writes are recorded in
+the same audit log the API writes to; without it the file journal is used, and everything
+else behaves identically.
+
+`make mcp` runs exactly this server by hand. It is the quickest way to tell a broken
+install from a broken client config — it prints nothing and waits on stdin, which is what
+success looks like.
 
 ## Design notes
 
