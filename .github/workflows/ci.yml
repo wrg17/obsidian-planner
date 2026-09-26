@@ -1,0 +1,85 @@
+# The gate. Nothing reaches main without passing this.
+#
+# The repo ran for 39 commits with no CI, and two of them shipped defects a reader of
+# the diff would have caught in seconds: one commit message described a README section
+# the diff did not contain, and one extraction left a byte-identical copy of twelve
+# paragraphs behind. Tests would not have caught either. A required check plus a human
+# reading the diff would have caught both.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # A new push to the same branch cancels the previous run. Several agents push often;
+  # without this the queue fills with runs nobody is waiting for.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: .tooling
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      # The suite needs Postgres for the audit-log tests. Given one, pytest-postgresql
+      # creates and drops `planner_test` beside it -- never the database holding real
+      # audit history, which it would also happily drop.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: planner
+          POSTGRES_PASSWORD: planner
+          POSTGRES_DB: planner
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U planner"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: .tooling/pyproject.toml
+
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q --upgrade pip
+          .venv/bin/pip install -q -e ".[dev,api,mcp,postgres,docs]"
+
+      # Separate steps rather than one `make check`, so a failure names itself in the
+      # job list instead of being read out of a log.
+      - name: Format
+        run: .venv/bin/ruff format --check src tests demo
+
+      - name: Lint
+        run: .venv/bin/ruff check src tests demo
+
+      - name: Types
+        run: .venv/bin/mypy src/planner --ignore-missing-imports
+        continue-on-error: true    # advisory until the existing 27 are cleared
+
+      - name: Tests
+        env:
+          PLANNER_TEST_DSN: postgresql://planner:planner@127.0.0.1:5432/planner_test
+        run: .venv/bin/pytest
+
+      - name: Docs are current
+        run: .venv/bin/python -m planner.docsgen --check
+
+      - name: Vault is valid
+        # The notes are the product. A schema change that invalidates notes already in
+        # the vault passes every unit test -- the tests build their own fixtures -- and
+        # breaks the real thing.
+        run: .venv/bin/python scripts/check_vault.py ..

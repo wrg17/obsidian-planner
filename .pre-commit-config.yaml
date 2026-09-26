@@ -1,0 +1,46 @@
+# Local gate. The same checks CI runs, but in the second before a commit rather than
+# the minutes after a push -- which matters most for an agent, because a failure it
+# sees immediately gets fixed in the same breath, and one it sees after a round trip
+# often lands as a second "fix lint" commit on top.
+#
+#     cd .tooling && .venv/bin/pre-commit install
+#
+# `make check` remains the real gate; this is the fast subset that needs no database.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.7
+    hooks:
+      - id: ruff-format
+        files: ^\.tooling/(src|tests|demo)/
+      - id: ruff
+        args: [--fix]
+        files: ^\.tooling/(src|tests|demo)/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(Items|Docs|Meetings|Reviews|Journal)/   # the user's own notes
+      - id: end-of-file-fixer
+        exclude: ^(Items|Docs|Meetings|Reviews|Journal)/
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=512]
+
+  - repo: local
+    hooks:
+      - id: docs-current
+        name: generated docs match the code
+        entry: bash -c 'cd .tooling && .venv/bin/python -m planner.docsgen --check'
+        language: system
+        pass_filenames: false
+        files: ^\.tooling/src/planner/(api/routes|domain|contracts)/
+
+      - id: no-commit-to-main
+        name: refuse a commit straight to main
+        entry: bash -c '[ "$(git branch --show-current)" != "main" ] || { echo "commit to a branch and open a PR"; exit 1; }'
+        language: system
+        pass_filenames: false
+        always_run: true
