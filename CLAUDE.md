@@ -18,7 +18,7 @@ in Obsidian, never the owner of the data.
 ```sh
 cd .tooling
 make install
-make check     # lint + 1042 tests + docs freshness. Must pass before and after.
+make check     # lint, tests and docs freshness. Must pass before and after.
 ```
 
 If `make check` fails before you have touched anything, say so and stop. You have
