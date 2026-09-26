@@ -1,4 +1,4 @@
-# The gate. Nothing reaches main without passing this.
+# The gate. Nothing reaches the trunk without passing this.
 #
 # The repo ran for 39 commits with no CI, and two of them shipped defects a reader of
 # the diff would have caught in seconds: one commit message described a README section
@@ -11,7 +11,10 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    # Both names: start-fresh.sh re-initialises a fresh clone on `main`, and this
+    # repository kept `master`. Listing one meant the push trigger never fired here,
+    # and only the pull_request trigger above was doing any gating.
+    branches: [main, master]
 
 concurrency:
   # A new push to the same branch cancels the previous run. Several agents push often;

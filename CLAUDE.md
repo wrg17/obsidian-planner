@@ -26,8 +26,10 @@ inherited a broken tree and fixing it is a different task from the one you were 
 
 ## Branch and PR discipline
 
-**Never commit to `main`.** Not for a one-line fix, not for a typo, not because the
-change is obviously safe. Every change arrives as a pull request that CI has passed.
+**Never commit to the trunk.** That is `main` in a fresh clone and `master` in this
+repository — `start-fresh.sh` re-initialises on the former, and this repo kept the
+latter. Not for a one-line fix, not for a typo, not because the change is obviously
+safe. Every change arrives as a pull request that CI has passed.
 
 ```sh
 git checkout -b <topic>          # or: worktree, see below
@@ -95,7 +97,7 @@ extracting: two copies drift, and a test asserting on the copy will keep it aliv
 
 ## What not to do
 
-- Do not commit to `main`, or push to another agent's branch.
+- Do not commit to the trunk (`main` or `master`), or push to another agent's branch.
 - Do not delete or rewrite notes in `Items/`, `Docs/`, `Meetings/`, `Reviews/` or
   `Journal/`. Those are the user's real work. The demo generator owns only files marked
   `demo: true`.
