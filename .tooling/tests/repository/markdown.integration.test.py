@@ -52,16 +52,16 @@ class TestFind:
         repo.save(Note(kind="task", title="T"))
         assert repo.exists("T")
 
-    def test_exists_is_as_case_sensitive_as_the_filesystem(self, repo, tmp_path):
-        """Not a guarantee this layer makes. macOS is case-insensitive by default and
-        Linux is not, so `exists("t")` for a file named T.md differs by machine. The
-        service does not rely on it -- uniqueness is checked with casefold there.
+    def test_exists_is_case_insensitive_on_every_filesystem(self, repo):
+        """`exists` is `find(title) is not None`, and `find` falls back to a casefolded
+        scan when the exact-path probe misses -- so the answer does not depend on the
+        volume, which is the guarantee the test below states. Asserted unconditionally
+        rather than against a probe of the filesystem's own case sensitivity: that
+        version agreed with this layer only on a case-insensitive volume, so it passed
+        on macOS and failed the first time the suite ran on Linux.
         """
         repo.save(Note(kind="task", title="T"))
-        probe = tmp_path / "CaseProbe"
-        probe.write_text("x")
-        insensitive = (tmp_path / "caseprobe").exists()
-        assert repo.exists("t") is insensitive
+        assert repo.exists("t") is True
 
     def test_find_falls_back_to_a_case_insensitive_scan(self, repo):
         """So lookup does not depend on the filesystem. On a case-sensitive volume the
