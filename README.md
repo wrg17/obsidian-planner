@@ -385,7 +385,7 @@ Every response carries `x-request-id` and `x-response-time-ms`.
 
 ### MCP
 
-Ten tools, with schemas generated from the same vocabularies as everything else. That
+Every tool's schema is generated from the same vocabularies as everything else. That
 matters more here than for REST: a model reads the tool schema as the specification, and
 given `"type": "string"` it will confidently send `"Epic"`.
 
@@ -409,13 +409,11 @@ the vault, because the server otherwise falls back to `.` — which is the *clie
 directory, not yours, and a model that finds an empty vault reports it as empty rather than
 as misconfigured.
 
-Claude Code, run from the vault root:
-
-```sh
-claude mcp add planner \
-  --env PLANNER_VAULT="$PWD" \
-  -- "$PWD/.tooling/.venv/bin/python" -m planner.mcp
-```
+Claude Code needs no setup: `.mcp.json` at the vault root declares the server, and
+expands `${PWD}` to the vault — so run `claude` from the vault root and nothing else is
+required. The config is not reproduced here; read the file. The first session asks you to
+approve it, which is the client confirming you trust a server the repository asked it to
+run, and `claude mcp list` says whether it connected.
 
 Claude Desktop — and anything else taking the same shape, in
 `claude_desktop_config.json`:

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "planner": {
+      "command": "${PWD}/.tooling/.venv/bin/python",
+      "args": ["-m", "planner.mcp"],
+      "env": {
+        "PLANNER_VAULT": "${PWD}"
+      }
+    }
+  }
+}
