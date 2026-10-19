@@ -1,7 +1,5 @@
 """MCP tools. Dispatch is transport-agnostic, so these need no MCP client."""
 
-from types import SimpleNamespace
-
 import pytest
 
 from planner.api.routes import ROUTES
@@ -116,35 +114,29 @@ class TestDispatch:
         out = call_tool("describe_schema", {}, populated)
         assert len(out["result"]["kinds"]) == 10
 
-    def test_describe_schema_names_the_vault_it_is_serving(self, populated, vault):
+    def test_describe_server_names_the_vault_it_is_serving(self, populated, vault):
         """The only way to tell two planners apart.
 
         Every clone declares its server as `planner` and exposes the same tools, so a
-        transcript shows nothing that distinguishes them. Without this a model cannot
-        say which vault it just wrote to.
+        transcript shows nothing distinguishing them, and a model cannot say which
+        vault it just wrote to.
         """
-        out = call_tool("describe_schema", {}, populated)
-        assert out["result"]["vault"] == str(vault.repo.root.resolve())
+        out = call_tool("describe_server", {}, populated)
+        assert out["result"]["vault"] == str(vault.repo.root)
 
-    def test_the_vault_is_absolute_so_it_does_not_read_against_the_client(
-        self, populated
+    def test_describe_server_reports_an_unreachable_vault_without_failing(
+        self, tmp_path
     ):
-        """A relative path would be resolved by whoever displays it, not by the server
-        that knows what it means -- and the client's working directory is not the
-        server's.
+        """N1: misconfigured and down are different conditions. A model that gets an
+        error cannot tell which, and the commonest mistake here is a PLANNER_VAULT
+        pointing somewhere that does not exist.
         """
-        from pathlib import Path
+        from planner.repository.markdown import MarkdownNoteRepository
+        from planner.service.notes import NoteService
 
-        assert Path(
-            call_tool("describe_schema", {}, populated)["result"]["vault"]
-        ).is_absolute()
-
-    def test_a_rootless_backend_reports_no_vault_rather_than_a_guess(self):
-        """The port allows storage that is not a place on disk. Answering "." or the
-        working directory would be a path a model could act on and be wrong about.
-        """
-        service = SimpleNamespace(repo=SimpleNamespace(root=None))
-        assert call_tool("describe_schema", {}, service)["result"]["vault"] is None
+        service = NoteService(MarkdownNoteRepository(tmp_path / "nope"))
+        out = call_tool("describe_server", {}, service)
+        assert out["ok"] is True and out["result"]["reachable"] is False
 
     def test_find_problems(self, populated):
         (populated.repo.root / "Items" / "Typo.md").write_text(

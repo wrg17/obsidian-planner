@@ -17,11 +17,6 @@ from planner.repository.markdown import MarkdownNoteRepository
 class InMemoryRepository:
     """A complete implementation, used to prove the port is honest."""
 
-    # Nothing is on disk, so there is no root to report. The port allows None for
-    # exactly this case; a dict pretending to be a directory would be the dishonest
-    # answer.
-    root = None
-
     def __init__(self):
         self.saved = {}
 

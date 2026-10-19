@@ -116,8 +116,6 @@ def test_repository_is_swappable():
     from planner.service.notes import NoteService
 
     class InMemory:
-        root = None  # not a place on disk; the port allows None rather than a guess
-
         def __init__(self):
             self.saved = {}
 

@@ -426,7 +426,7 @@ run, and `claude mcp list` says whether it connected.
 
 **More than one planner.** Nothing stops you keeping several vaults from this starter,
 and two things make them hard to tell apart: every clone declares its server under the
-same key, `planner`, and every clone exposes the same nine tools. A transcript of
+same key, `planner`, and every clone exposes the same tools. A transcript of
 `mcp__planner__update_note` names no vault.
 
 Two answers, and you want both. Rename the key in that clone's `.mcp.json` —
@@ -434,7 +434,13 @@ Two answers, and you want both. Rename the key in that clone's `.mcp.json` —
 key, so every call reads `mcp__planner-kitchen__update_note` and the vault is on the
 face of it. This is a per-clone edit: variables expand in `command`, `args` and `env`,
 but not in a JSON key, so it cannot come from the environment. And ask the server:
-`describe_schema` reports `vault`, the absolute path it is actually serving.
+`describe_server` reports the resolved vault path, and whether it is reachable.
+
+`describe_server` is `GET /health`, which was withheld from MCP as operational until
+there was more than one vault to be confused about. The question belongs there and not
+in `describe_schema`: that one reports the rules, which are the same in every vault by
+invariant, and a per-vault field in a response documented as identical everywhere is a
+contradiction rather than a convenience.
 
 Neither is a safety mechanism, because `${PWD}` already is one — a server declared in
 `.mcp.json` is bound to the directory you started the client in and cannot reach another
