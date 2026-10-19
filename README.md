@@ -415,6 +415,26 @@ required. The config is not reproduced here; read the file. The first session as
 approve it, which is the client confirming you trust a server the repository asked it to
 run, and `claude mcp list` says whether it connected.
 
+**More than one planner.** Nothing stops you keeping several vaults from this starter,
+and two things make them hard to tell apart: every clone declares its server under the
+same key, `planner`, and every clone exposes the same nine tools. A transcript of
+`mcp__planner__update_note` names no vault.
+
+Two answers, and you want both. Rename the key in that clone's `.mcp.json` —
+`planner-kitchen`, `planner-work` — because Claude Code builds the tool prefix from the
+key, so every call reads `mcp__planner-kitchen__update_note` and the vault is on the
+face of it. This is a per-clone edit: variables expand in `command`, `args` and `env`,
+but not in a JSON key, so it cannot come from the environment. And ask the server:
+`describe_schema` reports `vault`, the absolute path it is actually serving.
+
+Neither is a safety mechanism, because `${PWD}` already is one — a server declared in
+`.mcp.json` is bound to the directory you started the client in and cannot reach another
+vault. The exception is a *local* or *user*-scoped registration, which holds an absolute
+path, outranks the committed file, and will happily serve a vault you are not standing
+in. `claude mcp get planner` prints the scope, which is the one-line way to tell:
+`Project config (shared via .mcp.json)` is bound to your directory, `Local config` is
+bound to whatever it was created with.
+
 Claude Desktop — and anything else taking the same shape, in
 `claude_desktop_config.json`:
 

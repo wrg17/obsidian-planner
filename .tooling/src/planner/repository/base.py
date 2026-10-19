@@ -10,6 +10,7 @@ implementation could be SQLite or an object store without the service noticing.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from ..domain.note import Note
@@ -23,6 +24,14 @@ class NoteRepository(Protocol):
     about which fields a kind may carry belong to the domain, and rules about defaults
     and relationships belong to the service.
     """
+
+    #: The directory notes live in, or None for a backend that is not a place on disk.
+    #: Part of the port because one vault per machine stopped being the assumption: with
+    #: several planners every server is named `planner` and exposes the same tools, so a
+    #: model asked which one it is talking to needs storage to be able to answer.
+    #: Optional rather than required so the port stays honest -- an in-memory double has
+    #: no root, and saying None is truthful where inventing a path would not be.
+    root: Path | None
 
     def get(self, title: str) -> Note:
         """The note titled `title`. Raises NoteNotFoundError."""
