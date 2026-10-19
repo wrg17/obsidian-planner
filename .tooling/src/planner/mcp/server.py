@@ -91,8 +91,10 @@ NOT_EXPOSED = {
     (
         "GET",
         "/health",
-    ): "Operational. A model has no use for liveness or the vault path, and a tool it "
-    "will never sensibly call is noise in every prompt that lists the tools.",
+    ): "Operational. Liveness is the client's problem, not a model's, and a tool it "
+    "will never sensibly call is noise in every prompt that lists the tools. The "
+    "vault path this also carried is now reported by describe_schema, which a model "
+    "running against one of several planners does have a use for.",
     (
         "DELETE",
         "/notes/{title}",
@@ -324,6 +326,14 @@ def _dispatch(name, args, service):
                 "ticket_status": list(S.TICKET_STATUS),
                 "priority_range": list(S.PRIORITY_RANGE),
             },
+            # Which vault this server is serving. Every planner declares its server as
+            # `planner` and exposes the same nine tools, so with more than one clone
+            # nothing in a transcript distinguishes them and a model cannot say which
+            # notes it just edited. Absolute and resolved, because the relative form is
+            # read against the client's working directory rather than the server's.
+            "vault": None
+            if service.repo.root is None
+            else str(service.repo.root.resolve()),
         }
 
     if name == "find_problems":
