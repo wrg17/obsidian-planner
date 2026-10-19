@@ -76,6 +76,14 @@ COVERS = {
     "close_note": ("POST", "/notes/{title}/close"),
     "reopen_note": ("POST", "/notes/{title}/reopen"),
     "describe_schema": ("GET", "/schema"),
+    # Exposed after being withheld as "operational, a model has no use for it". That
+    # held while a machine had one vault. It does not now: every planner declares its
+    # server as `planner` and exposes the same tools, so a model asked which one it is
+    # editing had no way to answer. The route already discloses the resolved vault path
+    # on purpose (N4), which is exactly the question. Kept out of describe_schema,
+    # because that answers what the rules are -- identically in every vault, which is
+    # its own invariant (M3) -- and this answers which server is applying them.
+    "describe_server": ("GET", "/health"),
     "find_problems": ("GET", "/problems"),
 }
 
@@ -88,13 +96,6 @@ NOT_EXPOSED = {
     ): "A model can call create_note repeatedly. Bulk adds only atomicity across the "
     "batch, and an array-of-objects argument is a poor fit for tool calling -- more "
     "ways to get it wrong than the guarantee is worth.",
-    (
-        "GET",
-        "/health",
-    ): "Operational. Liveness is the client's problem, not a model's, and a tool it "
-    "will never sensibly call is noise in every prompt that lists the tools. The "
-    "vault path this also carried is now reported by describe_schema, which a model "
-    "running against one of several planners does have a use for.",
     (
         "DELETE",
         "/notes/{title}",
@@ -238,6 +239,11 @@ TOOLS = [
         "description": _description("find_problems"),
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "describe_server",
+        "description": _description("describe_server"),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -326,18 +332,13 @@ def _dispatch(name, args, service):
                 "ticket_status": list(S.TICKET_STATUS),
                 "priority_range": list(S.PRIORITY_RANGE),
             },
-            # Which vault this server is serving. Every planner declares its server as
-            # `planner` and exposes the same nine tools, so with more than one clone
-            # nothing in a transcript distinguishes them and a model cannot say which
-            # notes it just edited. Absolute and resolved, because the relative form is
-            # read against the client's working directory rather than the server's.
-            "vault": None
-            if service.repo.root is None
-            else str(service.repo.root.resolve()),
         }
 
     if name == "find_problems":
         return [{"title": t, "message": m} for t, m in service.problems()]
+
+    if name == "describe_server":
+        return service.vault_status()
 
     raise ValueError(f"unknown tool {name!r}")
 
